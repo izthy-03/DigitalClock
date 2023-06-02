@@ -3,11 +3,13 @@
 uint32_t ui32SysClock, ui32IntPriorityGroup, ui32IntPriorityMask;
 uint32_t ui32IntPrioritySystick, ui32IntPriorityUart0;
 
-uint8_t seg7[] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x58, 0x5e, 0x079, 0x71, 0x5c};
+uint8_t seg7[40] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x58, 0x5e, 0x079, 0x71, 0x5c};
 uint8_t uart_receive_char;
 
 void IO_initialize()
-{ // use internal 16M oscillator, PIOSC
+{
+    seg7['L' - 'A' + 10] = 0x38;
+    // use internal 16M oscillator, PIOSC
     // ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_16MHZ |SYSCTL_OSC_INT |SYSCTL_USE_OSC), 16000000);
     // ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_16MHZ |SYSCTL_OSC_INT |SYSCTL_USE_OSC), 8000000);
     // use external 25M oscillator, MOSC

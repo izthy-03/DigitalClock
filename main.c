@@ -57,9 +57,12 @@ void clock_display_time(dgtclock_t *clock);
 void alarm_init(alarm_t *alarm);
 int alarm_set(alarm_t *alarm, int sec, int min, int hour);
 void alarm_get(alarm_t *alarm, char *buf);
+void alarm_display(alarm_t *alarm);
 
 /* Timer functions */
 void timer_init(timer_t *timer);
+void timer_update(timer_t *timer);
+void timer_display(timer_t *timer);
 
 /* Util functions */
 int lowbit(int x);
@@ -74,15 +77,17 @@ int mode = 0;
 
 /* Define systick software counter */
 volatile uint16_t systick_10ms_counter, systick_100ms_counter, systick_1000ms_counter;
-volatile uint8_t systick_10ms_status, systick_100ms_status;
+volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
 
-extern uint8_t seg7[];
+extern uint8_t seg7[40];
+
+/* Create clock_t, alarm_t, timer_t instances */
+dgtclock_t clock;
+alarm_t alarm;
+timer_t timer;
 
 int main(void)
 {
-    dgtclock_t clock;
-    alarm_t alarm;
-    timer_t timer;
     char buf[128];
 
     IO_initialize();
@@ -93,10 +98,15 @@ int main(void)
 
     clock_get_date(&clock, buf);
     UARTStringPut((byte *)buf);
+
+    timer.enable = true;
     while (1)
     {
-        clock_display_date(&clock);
-        Delay(1000);
+        //    clock_display_date(&clock);
+        //     clock_display_time(&clock);
+        // alarm_display(&alarm);
+        timer_display(&timer);
+        Delay(100);
     }
 }
 
@@ -209,25 +219,36 @@ void clock_get_time(dgtclock_t *clock, char *buf)
 void clock_display_date(dgtclock_t *clock)
 {
     int i, bits[8];
-    uint8_t mask = 0x80, dot_seg = 0x00;
+    uint8_t mask = 0x80, seg_dot = 0x00;
     bits[0] = clock->mday % 10, bits[1] = clock->mday / 10;
     bits[2] = (clock->month + 1) % 10, bits[3] = (clock->month + 1) / 10;
     bits[4] = clock->year % 10, bits[5] = clock->year / 10 % 10;
     bits[6] = clock->year / 100 % 10, bits[7] = clock->year / 1000;
     for (i = 0; i < 8; i++, mask >>= 1)
     {
-        dot_seg = (i == 2 || i == 4) ? 0x80 : 0x00;
-
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | dot_seg);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
-        Delay(2000);
+        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        // Delay(1000);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        Delay(1000);
     }
 }
 /* Display time */
 void clock_display_time(dgtclock_t *clock)
 {
+    int i, bits[6];
+    uint8_t mask = 0x80, seg_dot = 0x00;
+    bits[0] = clock->sec % 10, bits[1] = clock->sec / 10;
+    bits[2] = clock->min % 10, bits[3] = clock->min / 10;
+    bits[4] = clock->hour % 10, bits[5] = clock->hour / 10;
+    for (i = 0; i < 6; i++, mask >>= 1)
+    {
+        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        Delay(1000);
+    }
 }
 
 /* Alarm methods */
@@ -257,6 +278,23 @@ void alarm_get(alarm_t *alarm, char *buf)
     sprintf(buf, "Alarm %02d:%02d:%02d\r\nEnabled: ", alarm->hour, alarm->min, alarm->sec);
     strcat(buf, alarm->enable ? "True\r\n" : "False\r\n");
 }
+void alarm_display(alarm_t *alarm)
+{
+    int i, bits[8];
+    uint8_t mask = 0x80, seg_dot = 0x00;
+    bits[0] = alarm->sec % 10, bits[1] = alarm->sec / 10;
+    bits[2] = alarm->min % 10, bits[3] = alarm->min / 10;
+    bits[4] = alarm->hour % 10, bits[5] = alarm->hour / 10;
+    bits[6] = 'L' - 'A' + 10, bits[7] = 'A' - 'A' + 10;
+    for (i = 0; i < 8; i++, mask >>= 1)
+    {
+        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        Delay(1000);
+    }
+}
 
 /* Timer methods */
 void timer_init(timer_t *timer)
@@ -266,14 +304,75 @@ void timer_init(timer_t *timer)
     timer->sec = 13;
     timer->min = 0;
 }
+/* Update timer when counting down */
+void timer_update(timer_t *timer)
+{
+    if (timer->millisec < 0)
+    {
+        timer->sec--;
+        timer->millisec = 999;
+    }
+    if (timer->sec < 0)
+    {
+        timer->min--;
+        timer->sec = 59;
+    }
+    /* Time up */
+    if (timer->min < 0)
+    {
+        timer->enable = false;
+        timer->millisec = 0;
+        timer->sec = 0;
+        timer->min = 0;
+    }
+}
+/* Display timer */
+void timer_display(timer_t *timer)
+{
+    int i, bits[8];
+    uint8_t mask = 0x80, seg_dot = 0x00;
+    bits[0] = timer->millisec / 10 % 10, bits[1] = timer->millisec / 100;
+    bits[2] = timer->sec % 10, bits[3] = timer->sec / 10;
+    bits[4] = timer->min % 10, bits[5] = timer->min / 10;
+    bits[6] = 'D' - 'A' + 10, bits[7] = 'C' - 'A' + 10;
+    for (i = 0; i < 8; i++, mask >>= 1)
+    {
+        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        Delay(1000);
+    }
+}
 
 /*
     Corresponding to the startup_TM4C129.s vector table systick interrupt program name
 */
 void SysTick_Handler(void)
 {
+    if (timer.enable)
+    {
+        timer.millisec--;
+        timer_update(&timer);
+    }
+
+    if (systick_1000ms_counter != 0)
+    {
+        systick_1000ms_counter--;
+    }
+    else
+    {
+        systick_1000ms_counter = SYSTICK_FREQUENCY;
+        systick_1000ms_status = 1;
+
+        clock.sec++;
+        clock_update(&clock);
+    }
+
     if (systick_100ms_counter != 0)
+    {
         systick_100ms_counter--;
+    }
     else
     {
         systick_100ms_counter = SYSTICK_FREQUENCY / 10;
@@ -281,7 +380,9 @@ void SysTick_Handler(void)
     }
 
     if (systick_10ms_counter != 0)
+    {
         systick_10ms_counter--;
+    }
     else
     {
         systick_10ms_counter = SYSTICK_FREQUENCY / 100;
