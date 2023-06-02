@@ -49,8 +49,8 @@
 #define TCA6424_OUTPUT_PORT1 0x05
 #define TCA6424_OUTPUT_PORT2 0x06
 
-#define IS_BLANK(s) (*(s) == ' ' || *(s) == '\t')
-#define IS_END(s) (*(s) == '\0')
+#define IS_BLANK(s) (*(s) == ' ' || *(s) == '\t' || *(s) == '\r' || *(s) == '\n')
+#define IS_END(s) (*(s) == '\0' || *(s) == '\r' || *(s) == '\n')
 #define SKIP_BLANK(s)                     \
     do                                    \
     {                                     \
@@ -64,6 +64,9 @@
         while (!IS_END(s) && !isdigit(*s)) \
             (s)++;                         \
     } while (0);
+
+#define MAXLINE 256
+#define MAXARGS 16
 
 #define MONTH_JAN 0
 #define MONTH_FEB 1

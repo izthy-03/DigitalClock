@@ -66,6 +66,8 @@ void timer_display(timer_t *timer);
 
 /* Util functions */
 int lowbit(int x);
+int parse_command(char *cmd, int *argc, char *argv[]);
+int execute_command(int, char **);
 
 /* Global display mode
  * 0 - time
@@ -78,6 +80,7 @@ int mode = 0;
 /* Define systick software counter */
 volatile uint16_t systick_10ms_counter, systick_100ms_counter, systick_1000ms_counter;
 volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
+volatile uint16_t UART_timeout;
 
 extern uint8_t seg7[40];
 
@@ -88,10 +91,11 @@ timer_t timer;
 
 int main(void)
 {
-    char buf[128];
+    char buf[MAXLINE];
 
     IO_initialize();
     test();
+    // clock=(dgtclock_t*)malloc(sizeof(dgtclock_t));
     clock_init(&clock, 59, 00, 8, 11, 5, 2023);
     alarm_init(&alarm);
     timer_init(&timer);
@@ -104,15 +108,15 @@ int main(void)
     {
         //    clock_display_date(&clock);
         //     clock_display_time(&clock);
-        // alarm_display(&alarm);
-        timer_display(&timer);
+        alarm_display(&alarm);
+        // timer_display(&timer);
         Delay(100);
     }
 }
 
 void test()
 {
-    char buf[64] = "0123456789\r\n";
+    char buf[MAXLINE] = "0123456789\r\n";
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
@@ -356,6 +360,11 @@ void SysTick_Handler(void)
         timer_update(&timer);
     }
 
+    if (UART_timeout != 0)
+    {
+        UART_timeout--;
+    }
+
     if (systick_1000ms_counter != 0)
     {
         systick_1000ms_counter--;
@@ -396,38 +405,127 @@ void SysTick_Handler(void)
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0);
 }
 
-void UART_response(char *receive)
+/* Parse the command string received
+ *  0 - parse succeeded
+ * -1 - parse failed
+ */
+int parse_command(char *cmd, int *argc, char *argv[])
 {
-    UARTStringPut((byte *)receive);
+    char buf[MAXLINE];
+    int len = -1, k;
+    SKIP_BLANK(cmd);
+    while (len && *argc <= MAXARGS)
+    {
+        k = *argc;
+        len = 0;
+        while (!IS_BLANK(cmd + len) && !IS_END(cmd + len))
+            len++;
+        if (len)
+        {
+            argv[k] = (char *)malloc(len + 5);
+            strncpy(argv[k], cmd, len);
+            strcat(argv[k], "\0");
+            (*argc)++;
+            cmd += len;
+            SKIP_BLANK(cmd);
+        }
+    }
+    if (*argc > MAXARGS)
+    {
+        sprintf(buf, "argc = %d\r\n", *argc);
+        UARTStringPut((byte *)buf);
+        UARTStringPut("Command parse error: too many arguments\r\n");
+        return -1;
+    }
+    if (!(*argc))
+    {
+        return -1;
+    }
+    return 0;
 }
+/* Execute the command string received
+ *  0 - execution succeeded
+ * -1 - execution failed
+ */
+int execute_command(int argc, char *argv[])
+{
+    char buf[MAXLINE];
+    if (!strcmp(argv[0], "?"))
+    {
+        UARTStringPut("Available commands:\n");
+        UARTStringPut("\tinit clock                       : intialize the clock to 00:00:00\n");
+        UARTStringPut("\tget <TIME/DATE/ALARM>            : get status\n");
+        UARTStringPut("\tset <TIME/ALARM/DATE> <xx:xx:xx> : set clock status\n");
+        UARTStringPut("\trun <TIME/DATE/STWATCH>          : run functions\n");
+    }
+    else if (!strcasecmp(argv[0], "init"))
+    {
+    }
+    else if (!strcasecmp(argv[0], "get"))
+    {
+    }
+    else if (!strcasecmp(argv[0], "set"))
+    {
+    }
+    else if (!strcasecmp(argv[0], "run"))
+    {
+    }
+    else
+    {
+        UARTStringPut("Command not found. Type '?' for help\r\n");
+    }
+    return 0;
+}
+
 /*
     Corresponding to the startup_TM4C129.s vector table UART0_Handler interrupt program name
 */
 void UART0_Handler(void)
 {
-    char buf[64];
-    int cnt = 0;
+    char buf[MAXLINE], c[1];
+    char *argv[16]; // max 16 parameters
+    int argc = 0, i;
     int32_t uart0_int_status;
-    uart0_int_status = UARTIntStatus(UART0_BASE, true); // Get the interrrupt status.
 
-    UARTIntClear(UART0_BASE, uart0_int_status); // Clear the asserted interrupts
+    memset(buf, 0, sizeof(buf));
+    uart0_int_status = UARTIntStatus(UART0_BASE, true); // Get the interrrupt status.
+    UARTIntClear(UART0_BASE, uart0_int_status);         // Clear the asserted interrupts
 
     while (UARTCharsAvail(UART0_BASE)) // Loop while there are characters in the receive FIFO.
     {
-        /// Read the next character from the UART and write it back to the UART.
-        // UARTCharPutNonBlocking(UART0_BASE, UARTCharGetNonBlocking(UART0_BASE));
-        // GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
-        // Delay(1000);
-        buf[cnt++] = UARTCharGetNonBlocking(UART0_BASE);
+        /* Read the next character from the UART and write it back to the UART. */
+        c[0] = UARTCharGet(UART0_BASE);
+        strcat(buf, c);
+        if (c[0] == '\r')
+            break;
+        /* wait for the line to come to the end */
+        if (!UARTCharsAvail(UART0_BASE))
+        {
+            UART_timeout = 5;
+            while (UART_timeout)
+                ;
+        }
     }
-    buf[cnt] = '\0', cnt = 0;
-    UART_response(buf);
 
+    if (parse_command(buf, &argc, argv) != 0)
+    {
+        for (i = 0; i < argc; i++)
+            free(argv[i]);
+        return;
+    }
+
+    execute_command(argc, argv);
+
+    // sprintf(buf, "argc = %d\r\n", argc);
+    // UARTStringPut((byte *)buf);
+    // for (i = 0; i < argc; i++)
+    // {
+    //     UARTStringPut((byte *)argv[i]);
+    //     UARTStringPut("\r\n");
+    // }
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
-
     while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0)
         GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
-
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
 }
 

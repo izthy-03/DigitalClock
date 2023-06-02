@@ -69,25 +69,25 @@ ARM Macro Assembler    Page 1
 ARM Macro Assembler    Page 2 
 
 
-   44 00000200 00000000 
+   44 00000200 00010000 
                        Heap_Size
-                               EQU              0x00000000
+                               EQU              0x00010000
    45 00000200         
    46 00000200                 AREA             HEAP, NOINIT, READWRITE, ALIGN=
 3
    47 00000000         __heap_base
    48 00000000         Heap_Mem
                                SPACE            Heap_Size
-   49 00000000         __heap_limit
-   50 00000000         
-   51 00000000         
-   52 00000000                 PRESERVE8
-   53 00000000                 THUMB
-   54 00000000         
-   55 00000000         
-   56 00000000         ; Vector Table Mapped to Address 0 at Reset
-   57 00000000         
-   58 00000000                 AREA             RESET, DATA, READONLY
+   49 00010000         __heap_limit
+   50 00010000         
+   51 00010000         
+   52 00010000                 PRESERVE8
+   53 00010000                 THUMB
+   54 00010000         
+   55 00010000         
+   56 00010000         ; Vector Table Mapped to Address 0 at Reset
+   57 00010000         
+   58 00010000                 AREA             RESET, DATA, READONLY
    59 00000000                 EXPORT           __Vectors
    60 00000000                 EXPORT           __Vectors_End
    61 00000000                 EXPORT           __Vectors_Size
@@ -1284,8 +1284,8 @@ ARM Macro Assembler    Page 20
  1004 0000010C         
  1005 0000010C 4804            LDR              R0, =  Heap_Mem
  1006 0000010E 4905            LDR              R1, =(Stack_Mem + Stack_Size)
- 1007 00000110 4A03            LDR              R2, = (Heap_Mem +  Heap_Size)
- 1008 00000112 4B05            LDR              R3, = Stack_Mem
+ 1007 00000110 4A05            LDR              R2, = (Heap_Mem +  Heap_Size)
+ 1008 00000112 4B06            LDR              R3, = Stack_Mem
  1009 00000114 4770            BX               LR
  1010 00000116         
  1011 00000116 00 00           ALIGN
@@ -1304,6 +1304,7 @@ ARM Macro Assembler    Page 20
 ARM Macro Assembler    Page 21 
 
 
+              00010000 
               00000000 
 Command Line: --debug --xref --diag_suppress=9931 --cpu=Cortex-M4.fp --apcs=int
 erwork --depend=.\objects\startup_tm4c129.d -o.\objects\startup_tm4c129.o -Id:\
@@ -1375,7 +1376,7 @@ Symbol: __heap_base
    Uses
       None
 Comment: __heap_base unused
-__heap_limit 00000000
+__heap_limit 00010000
 
 Symbol: __heap_limit
    Definitions
@@ -2733,7 +2734,7 @@ Comment: __user_initial_stackheap used once
 ARM Macro Assembler    Page 1 Alphabetic symbol ordering
 Absolute symbols
 
-Heap_Size 00000000
+Heap_Size 00010000
 
 Symbol: Heap_Size
    Definitions
