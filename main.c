@@ -26,18 +26,18 @@ typedef struct
 /* Alarm type*/
 typedef struct
 {
-    int hour;
-    int min;
     int sec;
+    int min;
+    int hour;
     bool enable;
 } alarm_t;
 
 /* Countdown type */
 typedef struct
 {
-    int min;
-    int sec;
     int millisec;
+    int sec;
+    int min;
     bool enable;
 } timer_t;
 
@@ -51,6 +51,8 @@ void clock_get_date(dgtclock_t *clock, char *buf);
 void clock_get_time(dgtclock_t *clock, char *buf);
 
 void alarm_init(alarm_t *alarm);
+int alarm_set(alarm_t *alarm, int sec, int min, int hour);
+void alarm_get(alarm_t *alarm, char *buf);
 
 void timer_init(timer_t *timer);
 
@@ -201,10 +203,33 @@ void alarm_init(alarm_t *alarm)
     alarm->min = 2;
     alarm->sec = 0;
 }
+/* Set alarm time
+ *  0 - set ok
+ * -1 - time error
+ */
+int alarm_set(alarm_t *alarm, int sec, int min, int hour)
+{
+    if (sec < 0 || sec > 59 || min < 0 || min > 59 || hour < 0 || hour > 23)
+        return -1;
+    alarm->sec = sec;
+    alarm->min = min;
+    alarm->hour = hour;
+    return 0;
+}
+/* Get alarm time */
+void alarm_get(alarm_t *alarm, char *buf)
+{
+    sprintf(buf, "Alarm %02d:%02d:%02d\r\nEnabled: ", alarm->hour, alarm->min, alarm->sec);
+    strcat(buf, alarm->enable ? "True\r\n" : "False\r\n");
+}
 
 /* Timer methods */
 void timer_init(timer_t *timer)
 {
+    timer->enable = false;
+    timer->millisec = 233;
+    timer->sec = 13;
+    timer->min = 0;
 }
 
 /*
