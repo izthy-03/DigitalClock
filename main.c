@@ -43,20 +43,28 @@ typedef struct
 
 void test(void);
 
+/* Clock functions */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, int year);
 void clock_update(dgtclock_t *clock);
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year);
 int clock_set_time(dgtclock_t *clock, int sec, int min, int hour);
 void clock_get_date(dgtclock_t *clock, char *buf);
 void clock_get_time(dgtclock_t *clock, char *buf);
+void clock_display_date(dgtclock_t *clock);
+void clock_display_time(dgtclock_t *clock);
 
+/* Alarm functions */
 void alarm_init(alarm_t *alarm);
 int alarm_set(alarm_t *alarm, int sec, int min, int hour);
 void alarm_get(alarm_t *alarm, char *buf);
 
+/* Timer functions */
 void timer_init(timer_t *timer);
 
-/* Clock mode
+/* Util functions */
+int lowbit(int x);
+
+/* Global display mode
  * 0 - time
  * 1 - date
  * 2 - alarm
@@ -72,25 +80,29 @@ extern uint8_t seg7[];
 
 int main(void)
 {
-    dgtclock_t *clock;
-    alarm_t *alarm;
-    timer_t *timer;
-    clock = (dgtclock_t *)malloc(sizeof(dgtclock_t));
-    alarm = (alarm_t *)malloc(sizeof(alarm_t));
-    timer = (timer_t *)malloc(sizeof(timer_t));
+    dgtclock_t clock;
+    alarm_t alarm;
+    timer_t timer;
+    char buf[128];
+
     IO_initialize();
     test();
-    clock_init(clock, 59, 00, 8, 11, 6, 2023);
-    alarm_init(alarm);
-    timer_init(timer);
+    clock_init(&clock, 59, 00, 8, 11, 5, 2023);
+    alarm_init(&alarm);
+    timer_init(&timer);
+
+    clock_get_date(&clock, buf);
+    UARTStringPut((byte *)buf);
     while (1)
     {
+        clock_display_date(&clock);
+        Delay(1000);
     }
 }
 
 void test()
 {
-    char buf[64] = "0123456789";
+    char buf[64] = "0123456789\r\n";
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
@@ -106,7 +118,7 @@ void clock_init(dgtclock_t *clock, int ss, int mm, int hh,
     clock->hour = hh;
     clock->mday = mday;
     clock->yday = 0;
-    clock->month = month - 1;
+    clock->month = month;
     clock->year = year;
     clock->isleap = (year % 100 && year % 4 == 0) || (year % 400 == 0);
     /* Set built-in calendar */
@@ -161,14 +173,13 @@ void clock_update(dgtclock_t *clock)
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year)
 {
     int leap, days;
-    month--;
     if (year < 0 || month > MONTH_DEC || month < 0)
         return -1;
     leap = (year % 100 && year % 4 == 0) || (year % 400 == 0);
     days = (month == MONTH_FEB) ? 28 + leap : clock->days[month];
     if (mday < 1 || mday > days)
         return -1;
-    clock_init(clock, clock->sec, clock->min, clock->hour, mday, month + 1, year);
+    clock_init(clock, clock->sec, clock->min, clock->hour, mday, month, year);
     return 0;
 }
 /* Set clock time
@@ -193,6 +204,30 @@ void clock_get_date(dgtclock_t *clock, char *buf)
 void clock_get_time(dgtclock_t *clock, char *buf)
 {
     sprintf(buf, "Time %02d:%02d:%02d\r\n", clock->hour, clock->min, clock->sec);
+}
+/* Display date */
+void clock_display_date(dgtclock_t *clock)
+{
+    int i, bits[8];
+    uint8_t mask = 0x80, dot_seg = 0x00;
+    bits[0] = clock->mday % 10, bits[1] = clock->mday / 10;
+    bits[2] = (clock->month + 1) % 10, bits[3] = (clock->month + 1) / 10;
+    bits[4] = clock->year % 10, bits[5] = clock->year / 10 % 10;
+    bits[6] = clock->year / 100 % 10, bits[7] = clock->year / 1000;
+    for (i = 0; i < 8; i++, mask >>= 1)
+    {
+        dot_seg = (i == 2 || i == 4) ? 0x80 : 0x00;
+
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | dot_seg);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        Delay(2000);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        // Delay(1000);
+    }
+}
+/* Display time */
+void clock_display_time(dgtclock_t *clock)
+{
 }
 
 /* Alarm methods */
@@ -262,6 +297,7 @@ void SysTick_Handler(void)
 
 void UART_response(char *receive)
 {
+    UARTStringPut((byte *)receive);
 }
 /*
     Corresponding to the startup_TM4C129.s vector table UART0_Handler interrupt program name
@@ -292,4 +328,13 @@ void UART0_Handler(void)
         GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
 
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
+}
+
+/* Return the lowest bit, start from 0 */
+int lowbit(int x)
+{
+    int k = 0;
+    for (; !(x & 1); k++)
+        x >>= 1;
+    return k;
 }

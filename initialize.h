@@ -1,3 +1,6 @@
+#ifndef _INITIALIZE_H
+#define _INITIALIZE_H
+
 #include "headers.h"
 
 void IO_initialize(void);
@@ -11,3 +14,5 @@ void S800_UART_Init(void);
 
 void UARTStringPut(uint8_t *cMessage);
 void UARTStringPutNonBlocking(const char *cMessage);
+
+#endif

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "initialize.h": "c",
-        "hw_memmap.h": "c"
+        "hw_memmap.h": "c",
+        "headers.h": "c"
     }
 }

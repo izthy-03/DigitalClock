@@ -1,3 +1,6 @@
+#ifndef _HEADERS_H
+#define _HEADERS_H
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -74,3 +77,5 @@
 #define MONTH_OCT 9
 #define MONTH_NOV 10
 #define MONTH_DEC 11
+
+#endif
