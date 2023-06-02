@@ -28,6 +28,7 @@ typedef struct
 {
     int hour;
     int min;
+    int sec;
     bool enable;
 } alarm_t;
 
@@ -46,6 +47,8 @@ void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, 
 void clock_update(dgtclock_t *clock);
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year);
 int clock_set_time(dgtclock_t *clock, int sec, int min, int hour);
+void clock_get_date(dgtclock_t *clock, char *buf);
+void clock_get_time(dgtclock_t *clock, char *buf);
 
 void alarm_init(alarm_t *alarm);
 
@@ -166,7 +169,6 @@ int clock_set_date(dgtclock_t *clock, int mday, int month, int year)
     clock_init(clock, clock->sec, clock->min, clock->hour, mday, month + 1, year);
     return 0;
 }
-
 /* Set clock time
  *  0 - set ok
  * -1 - time error
@@ -178,11 +180,26 @@ int clock_set_time(dgtclock_t *clock, int sec, int min, int hour)
     clock->sec = sec;
     clock->min = min;
     clock->hour = hour;
+    return 0;
+}
+/* Get clock date */
+void clock_get_date(dgtclock_t *clock, char *buf)
+{
+    sprintf(buf, "Date %d-%02d-%02d\r\n", clock->year, clock->month + 1, clock->mday);
+}
+/* Get clock time */
+void clock_get_time(dgtclock_t *clock, char *buf)
+{
+    sprintf(buf, "Time %02d:%02d:%02d\r\n", clock->hour, clock->min, clock->sec);
 }
 
 /* Alarm methods */
 void alarm_init(alarm_t *alarm)
 {
+    alarm->enable = false;
+    alarm->hour = 8;
+    alarm->min = 2;
+    alarm->sec = 0;
 }
 
 /* Timer methods */
