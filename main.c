@@ -41,7 +41,34 @@ typedef struct
     bool enable;
 } timer_t;
 
-void test(void);
+/* Global display mode
+ * 0 - time
+ * 1 - date
+ * 2 - alarm
+ * 3 - countdown
+ */
+int display_mode = 0;
+/* Global modification mode
+ * 0 - display mode
+ * 1 - modification mode
+ */
+int modify_mode = 0;
+/* Global modification pointer
+ *   0 - undefined
+ * 1~3 - correspond to respective position
+ */
+int modify_ptr = 0;
+
+/* Global button events */
+int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
+int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC;
+
+/* Define systick software counter */
+volatile uint16_t systick_10ms_counter, systick_100ms_counter, systick_1000ms_counter;
+volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
+
+volatile uint16_t UART_timeout;
+extern uint8_t seg7[40];
 
 /* Clock functions */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, int year);
@@ -69,23 +96,9 @@ int parse_command(char *cmd, int *argc, char *argv[]);
 int execute_command(int, char **);
 
 /* Util functions */
+void test(void);
 int lowbit(int x);
 int get_format_nums(char *buf, int *x, int *y, int *z);
-
-/* Global display mode
- * 0 - time
- * 1 - date
- * 2 - alarm
- * 3 - countdown
- */
-int mode = 0;
-
-/* Define systick software counter */
-volatile uint16_t systick_10ms_counter, systick_100ms_counter, systick_1000ms_counter;
-volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
-volatile uint16_t UART_timeout;
-
-extern uint8_t seg7[40];
 
 /* Create clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
@@ -108,11 +121,36 @@ int main(void)
 
     while (1)
     {
-        //    clock_display_date(&clock);
-        //     clock_display_time(&clock);
-        alarm_display(&alarm);
+        // clock_display_date(&clock);
+        // clock_display_time(&clock);
+        // alarm_display(&alarm);
         // timer_display(&timer);
-        Delay(100);
+        switch (display_mode)
+        {
+        /* Time mode */
+        case 0:
+
+            break;
+
+        /* Date mode */
+        case 1:
+
+            break;
+
+        /* Alarm mode */
+        case 2:
+
+            break;
+
+        /* Countdown mode */
+        case 3:
+
+            break;
+
+        default:
+            break;
+        }
+        Delay(1000);
     }
 }
 
@@ -122,6 +160,10 @@ void test()
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
     UARTStringPut((byte *)buf);
+}
+
+void events_catch()
+{
 }
 
 /* Clock methods */
@@ -593,17 +635,17 @@ int execute_command(int argc, char *argv[])
         {
             if (!strcasecmp(argv[1], "time"))
             {
-                mode = 0;
+                display_mode = 0;
                 UARTStringPut("Display clock time\n");
             }
             else if (!strcasecmp(argv[1], "date"))
             {
-                mode = 1;
+                display_mode = 1;
                 UARTStringPut("Display clock date\n");
             }
             else if (!strcasecmp(argv[1], "cdown"))
             {
-                mode = 3;
+                display_mode = 3;
                 timer_enable(&timer);
                 // UARTStringPut("Display and start countdown\n");
             }
