@@ -106,7 +106,6 @@ int main(void)
     clock_get_date(&clock, buf);
     UARTStringPut((byte *)buf);
 
-    timer.enable = true;
     while (1)
     {
         //    clock_display_date(&clock);
@@ -222,9 +221,10 @@ void clock_get_time(dgtclock_t *clock, char *buf)
 {
     sprintf(buf, "Time %02d:%02d:%02d\n", clock->hour, clock->min, clock->sec);
 }
-/* Display date */
+/* Display date once */
 void clock_display_date(dgtclock_t *clock)
 {
+    /* Format: yyyy.mm.dd */
     int i, bits[8];
     uint8_t mask = 0x80, seg_dot = 0x00;
     bits[0] = clock->mday % 10, bits[1] = clock->mday / 10;
@@ -240,9 +240,10 @@ void clock_display_date(dgtclock_t *clock)
         Delay(1000);
     }
 }
-/* Display time */
+/* Display time once  */
 void clock_display_time(dgtclock_t *clock)
 {
+    /* Format: hh.mm.ss*/
     int i, bits[6];
     uint8_t mask = 0x80, seg_dot = 0x00;
     bits[0] = clock->sec % 10, bits[1] = clock->sec / 10;
@@ -285,8 +286,10 @@ void alarm_get(alarm_t *alarm, char *buf)
     sprintf(buf, "Alarm %02d:%02d:%02d\nEnabled: ", alarm->hour, alarm->min, alarm->sec);
     strcat(buf, alarm->enable ? "True\n" : "False\n");
 }
+/* Display alarm once */
 void alarm_display(alarm_t *alarm)
 {
+    /* Format: AL xx.yy.zz */
     int i, bits[8];
     uint8_t mask = 0x80, seg_dot = 0x00;
     bits[0] = alarm->sec % 10, bits[1] = alarm->sec / 10;
@@ -331,11 +334,26 @@ void timer_update(timer_t *timer)
         timer->millisec = 0;
         timer->sec = 0;
         timer->min = 0;
+        UARTStringPut("\n>>> Time is up!\n");
     }
 }
-/* Display timer */
+/* Wrapped enable function */
+void timer_enable(timer_t *timer)
+{
+    if (timer->enable)
+    {
+        UARTStringPut("Countdown has already started\n");
+    }
+    else
+    {
+        UARTStringPut("Start countdown\n");
+        timer->enable = true;
+    }
+}
+/* Display timer once */
 void timer_display(timer_t *timer)
 {
+    /* Format: cd xx.yy.zz*/
     int i, bits[8];
     uint8_t mask = 0x80, seg_dot = 0x00;
     bits[0] = timer->millisec / 10 % 10, bits[1] = timer->millisec / 100;
@@ -462,6 +480,7 @@ int execute_command(int argc, char *argv[])
         UARTStringPut("\trun <TIME/DATE/STWATCH>          : run functions\n");
         return 0;
     }
+    /* Execute INIT command */
     else if (!strcasecmp(argv[0], "init"))
     {
         if (argc == 2 && !strcasecmp(argv[1], "clock"))
@@ -476,6 +495,7 @@ int execute_command(int argc, char *argv[])
             return -1;
         }
     }
+    /* Execute GET command */
     else if (!strcasecmp(argv[0], "get"))
     {
         bool valid = (argc == 2) && (!strcasecmp(argv[1], "time") ||
@@ -487,20 +507,18 @@ int execute_command(int argc, char *argv[])
             {
                 clock_get_time(&clock, buf);
                 UARTStringPut((byte *)buf);
-                return 0;
             }
             else if (!strcasecmp(argv[1], "date"))
             {
                 clock_get_date(&clock, buf);
                 UARTStringPut((byte *)buf);
-                return 0;
             }
             else if (!strcasecmp(argv[1], "alarm"))
             {
                 alarm_get(&alarm, buf);
                 UARTStringPut((byte *)buf);
-                return 0;
             }
+            return 0;
         }
         else
         {
@@ -510,6 +528,7 @@ int execute_command(int argc, char *argv[])
             return -1;
         }
     }
+    /* Execute SET command */
     else if (!strcasecmp(argv[0], "set"))
     {
         int xx, yy, zz;
@@ -554,6 +573,7 @@ int execute_command(int argc, char *argv[])
                 }
                 UARTStringPut("Alarm time set successfully\n");
             }
+            return 0;
         }
         else
         {
@@ -563,15 +583,97 @@ int execute_command(int argc, char *argv[])
             return -1;
         }
     }
+    /* Execute RUN command */
     else if (!strcasecmp(argv[0], "run"))
     {
+        bool valid = (argc == 2) && (!strcasecmp(argv[1], "time") ||
+                                     !strcasecmp(argv[1], "date") ||
+                                     !strcasecmp(argv[1], "cdown"));
+        if (valid)
+        {
+            if (!strcasecmp(argv[1], "time"))
+            {
+                mode = 0;
+                UARTStringPut("Display clock time\n");
+            }
+            else if (!strcasecmp(argv[1], "date"))
+            {
+                mode = 1;
+                UARTStringPut("Display clock date\n");
+            }
+            else if (!strcasecmp(argv[1], "cdown"))
+            {
+                mode = 3;
+                timer_enable(&timer);
+                // UARTStringPut("Display and start countdown\n");
+            }
+            return 0;
+        }
+        else
+        {
+            UARTStringPut("Usage: run date  - display clock date\n");
+            UARTStringPut("       run time  - display clock time\n");
+            UARTStringPut("       run cdown - display and start timer countdown\n");
+            return -1;
+        }
+    }
+    /* Execute ENABLE command */
+    else if (!strcasecmp(argv[0], "enable"))
+    {
+        bool valid = (argc == 2) && (!strcasecmp(argv[1], "alarm") ||
+                                     !strcasecmp(argv[1], "cdown"));
+        if (valid)
+        {
+            if (!strcasecmp(argv[1], "alarm"))
+            {
+                alarm.enable = true;
+                UARTStringPut("Alarm is enabled now\n");
+            }
+            else if (!strcasecmp(argv[1], "cdown"))
+            {
+                timer_enable(&timer);
+                // UARTStringPut("Start countdown\n");
+            }
+            return 0;
+        }
+        else
+        {
+            UARTStringPut("Usage: enable alarm  - enable the alarm to go off\n");
+            UARTStringPut("       enable cdown  - start timer countdown\n");
+            return -1;
+        }
+    }
+    /* Execute DISABLE command */
+    else if (!strcasecmp(argv[0], "disable"))
+    {
+        bool valid = (argc == 2) && (!strcasecmp(argv[1], "alarm") ||
+                                     !strcasecmp(argv[1], "cdown"));
+        if (valid)
+        {
+            if (!strcasecmp(argv[1], "alarm"))
+            {
+                alarm.enable = false;
+                UARTStringPut("Alarm is disabled\n");
+            }
+            else if (!strcasecmp(argv[1], "cdown"))
+            {
+                timer.enable = false;
+                UARTStringPut("Stop countdown\n");
+            }
+            return 0;
+        }
+        else
+        {
+            UARTStringPut("Usage: disable alarm  - disable the alarm to go off\n");
+            UARTStringPut("       disable cdown  - stop timer countdown\n");
+            return -1;
+        }
     }
     else
     {
         UARTStringPut("Command not found. Type '?' for help\n");
         return -1;
     }
-    return 0;
 }
 
 /*
