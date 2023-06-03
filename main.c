@@ -64,10 +64,13 @@ void timer_init(timer_t *timer);
 void timer_update(timer_t *timer);
 void timer_display(timer_t *timer);
 
-/* Util functions */
-int lowbit(int x);
+/* Command functions */
 int parse_command(char *cmd, int *argc, char *argv[]);
 int execute_command(int, char **);
+
+/* Util functions */
+int lowbit(int x);
+int get_format_nums(char *buf, int *x, int *y, int *z);
 
 /* Global display mode
  * 0 - time
@@ -84,7 +87,7 @@ volatile uint16_t UART_timeout;
 
 extern uint8_t seg7[40];
 
-/* Create clock_t, alarm_t, timer_t instances */
+/* Create clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
 alarm_t alarm;
 timer_t timer;
@@ -182,7 +185,7 @@ void clock_update(dgtclock_t *clock)
 }
 /* Set clock date
  *  0 - set ok
- * -1 - date error
+ * -1 - invalid date
  */
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year)
 {
@@ -198,7 +201,7 @@ int clock_set_date(dgtclock_t *clock, int mday, int month, int year)
 }
 /* Set clock time
  *  0 - set ok
- * -1 - time error
+ * -1 - invalid time
  */
 int clock_set_time(dgtclock_t *clock, int sec, int min, int hour)
 {
@@ -212,12 +215,12 @@ int clock_set_time(dgtclock_t *clock, int sec, int min, int hour)
 /* Get clock date */
 void clock_get_date(dgtclock_t *clock, char *buf)
 {
-    sprintf(buf, "Date %d-%02d-%02d\r\n", clock->year, clock->month + 1, clock->mday);
+    sprintf(buf, "Date %d-%02d-%02d\n", clock->year, clock->month + 1, clock->mday);
 }
 /* Get clock time */
 void clock_get_time(dgtclock_t *clock, char *buf)
 {
-    sprintf(buf, "Time %02d:%02d:%02d\r\n", clock->hour, clock->min, clock->sec);
+    sprintf(buf, "Time %02d:%02d:%02d\n", clock->hour, clock->min, clock->sec);
 }
 /* Display date */
 void clock_display_date(dgtclock_t *clock)
@@ -279,8 +282,8 @@ int alarm_set(alarm_t *alarm, int sec, int min, int hour)
 /* Get alarm time */
 void alarm_get(alarm_t *alarm, char *buf)
 {
-    sprintf(buf, "Alarm %02d:%02d:%02d\r\nEnabled: ", alarm->hour, alarm->min, alarm->sec);
-    strcat(buf, alarm->enable ? "True\r\n" : "False\r\n");
+    sprintf(buf, "Alarm %02d:%02d:%02d\nEnabled: ", alarm->hour, alarm->min, alarm->sec);
+    strcat(buf, alarm->enable ? "True\n" : "False\n");
 }
 void alarm_display(alarm_t *alarm)
 {
@@ -432,9 +435,9 @@ int parse_command(char *cmd, int *argc, char *argv[])
     }
     if (*argc > MAXARGS)
     {
-        sprintf(buf, "argc = %d\r\n", *argc);
+        sprintf(buf, "argc = %d\n", *argc);
         UARTStringPut((byte *)buf);
-        UARTStringPut("Command parse error: too many arguments\r\n");
+        UARTStringPut("Command parse error: too many arguments\n");
         return -1;
     }
     if (!(*argc))
@@ -457,22 +460,116 @@ int execute_command(int argc, char *argv[])
         UARTStringPut("\tget <TIME/DATE/ALARM>            : get status\n");
         UARTStringPut("\tset <TIME/ALARM/DATE> <xx:xx:xx> : set clock status\n");
         UARTStringPut("\trun <TIME/DATE/STWATCH>          : run functions\n");
+        return 0;
     }
     else if (!strcasecmp(argv[0], "init"))
     {
+        if (argc == 2 && !strcasecmp(argv[1], "clock"))
+        {
+            clock_init(&clock, 0, 0, 0, 1, 0, 2000);
+            UARTStringPut("Clock reset to 2000-1-1-00:00:00\n");
+            return 0;
+        }
+        else
+        {
+            UARTStringPut("Usage: init clock\n");
+            return -1;
+        }
     }
     else if (!strcasecmp(argv[0], "get"))
     {
+        bool valid = (argc == 2) && (!strcasecmp(argv[1], "time") ||
+                                     !strcasecmp(argv[1], "date") ||
+                                     !strcasecmp(argv[1], "alarm"));
+        if (valid)
+        {
+            if (!strcasecmp(argv[1], "time"))
+            {
+                clock_get_time(&clock, buf);
+                UARTStringPut((byte *)buf);
+                return 0;
+            }
+            else if (!strcasecmp(argv[1], "date"))
+            {
+                clock_get_date(&clock, buf);
+                UARTStringPut((byte *)buf);
+                return 0;
+            }
+            else if (!strcasecmp(argv[1], "alarm"))
+            {
+                alarm_get(&alarm, buf);
+                UARTStringPut((byte *)buf);
+                return 0;
+            }
+        }
+        else
+        {
+            UARTStringPut("Usage: get time  - return clock time\n");
+            UARTStringPut("       get date  - return clock date\n");
+            UARTStringPut("       get alarm - return alarm status\n");
+            return -1;
+        }
     }
     else if (!strcasecmp(argv[0], "set"))
     {
+        int xx, yy, zz;
+        bool valid = (argc == 3) && (!strcasecmp(argv[1], "time") ||
+                                     !strcasecmp(argv[1], "date") ||
+                                     !strcasecmp(argv[1], "alarm"));
+        if (valid)
+        {
+            if (get_format_nums(argv[2], &xx, &yy, &zz) != 0)
+            {
+                UARTStringPut("Invalid time/date format\n");
+                sprintf(buf, "Usage: set %s <%sxx:yy:zz>/<%sxx-yy-zz>\n",
+                        argv[1], !strcasecmp(argv[1], "date") ? "xx" : "",
+                        !strcasecmp(argv[1], "date") ? "xx" : "");
+                UARTStringPut((byte *)buf);
+                return -1;
+            }
+            if (!strcasecmp(argv[1], "time"))
+            {
+                if (clock_set_time(&clock, zz, yy, xx) != 0)
+                {
+                    UARTStringPut("Invalid time\n");
+                    return -1;
+                }
+                UARTStringPut("Clock time set successfully\n");
+            }
+            else if (!strcasecmp(argv[1], "date"))
+            {
+                if (clock_set_date(&clock, zz, yy - 1, xx) != 0)
+                {
+                    UARTStringPut("Invalid date\n");
+                    return -1;
+                }
+                UARTStringPut("Clock date set successfully\n");
+            }
+            else if (!strcasecmp(argv[1], "alarm"))
+            {
+                if (alarm_set(&alarm, zz, yy, xx) != 0)
+                {
+                    UARTStringPut("Invalid alarm time\n");
+                    return -1;
+                }
+                UARTStringPut("Alarm time set successfully\n");
+            }
+        }
+        else
+        {
+            UARTStringPut("Usage: set date <year-month-day>       - set clock date\n");
+            UARTStringPut("       set time <hh:mm:ss>/<hh-mm-ss>  - set clock time\n");
+            UARTStringPut("       set alarm <hh:mm:ss>/<hh-mm-ss> - set alarm time\n");
+            return -1;
+        }
     }
     else if (!strcasecmp(argv[0], "run"))
     {
     }
     else
     {
-        UARTStringPut("Command not found. Type '?' for help\r\n");
+        UARTStringPut("Command not found. Type '?' for help\n");
+        return -1;
     }
     return 0;
 }
@@ -516,6 +613,7 @@ void UART0_Handler(void)
 
     execute_command(argc, argv);
 
+    /* output parsed arguments for test */
     // sprintf(buf, "argc = %d\r\n", argc);
     // UARTStringPut((byte *)buf);
     // for (i = 0; i < argc; i++)
@@ -529,6 +627,8 @@ void UART0_Handler(void)
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
 }
 
+/* Util functions */
+
 /* Return the lowest bit, start from 0 */
 int lowbit(int x)
 {
@@ -536,4 +636,31 @@ int lowbit(int x)
     for (; !(x & 1); k++)
         x >>= 1;
     return k;
+}
+/* Parse formatted numbers, e.g.2023-6-12, 13:54:00
+ * return:  0 - valid format
+ *         -1 - invalid format
+ */
+int get_format_nums(char *buf, int *x, int *y, int *z)
+{
+    char delim;
+    if (strstr(buf, ":"))
+        delim = ':';
+    else if (strstr(buf, "-"))
+        delim = '-';
+    else
+        return -1;
+
+    *x = strtol(buf, &buf, 0);
+    if (*buf != delim || !isdigit(*(buf + 1)))
+        return -1;
+    SKIP_CHAR(buf);
+    *y = strtol(buf, &buf, 0);
+    if (*buf != delim || !isdigit(*(buf + 1)))
+        return -1;
+    SKIP_CHAR(buf);
+    *z = strtol(buf, &buf, 0);
+    if (!IS_END(buf))
+        return -1;
+    return 0;
 }
