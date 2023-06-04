@@ -45,29 +45,31 @@ typedef struct
  * 0 - time
  * 1 - date
  * 2 - alarm
- * 3 - countdown
- */
-int display_mode = 0;
+ * 3 - countdown */
+volatile int global_display_mode = 0;
+
 /* Global modification mode
  * 0 - display mode
- * 1 - modification mode
- */
-int modify_mode = 0;
+ * 1 - modification mode  */
+volatile int global_modify_mode = 0;
+
 /* Global modification pointer
  *   0 - undefined
- * 1~3 - correspond to respective position
- */
-int modify_ptr = 0;
+ * 1~3 - correspond to respective position */
+volatile int global_modify_ptr = 0;
+
+/* Global blink mask vector*/
+volatile uint8_t global_blink_mask = 0xff;
 
 /* Global button events */
 int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
 int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC;
 
 /* Define systick software counter */
-volatile uint16_t systick_10ms_counter, systick_100ms_counter, systick_1000ms_counter;
-volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
+volatile uint16_t blink_500ms_counter, systick_500ms_counter, systick_1000ms_counter;
+volatile uint8_t systick_10ms_status, systick_500ms_status, systick_1000ms_status;
 
-volatile uint16_t UART_timeout;
+volatile int global_timeout;
 extern uint8_t seg7[40];
 
 /* Clock functions */
@@ -95,10 +97,18 @@ void timer_display(timer_t *timer);
 int parse_command(char *cmd, int *argc, char *argv[]);
 int execute_command(int, char **);
 
+/*  Event functions */
+void events_catch(void);
+void events_clear(void);
+void update_blink_mask(uint8_t *mask, int ptr);
+void modify_value(int *target, int incr, int bound);
+
 /* Util functions */
 void test(void);
 int lowbit(int x);
+bool istriggered(uint8_t keyval, uint8_t preval, int eventid);
 int get_format_nums(char *buf, int *x, int *y, int *z);
+void delay_ms(int ms);
 
 /* Create clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
@@ -108,10 +118,11 @@ timer_t timer;
 int main(void)
 {
     char buf[MAXLINE];
+    int incr = 0, tmp;
 
     IO_initialize();
     test();
-    // clock=(dgtclock_t*)malloc(sizeof(dgtclock_t));
+
     clock_init(&clock, 59, 00, 8, 11, 5, 2023);
     alarm_init(&alarm);
     timer_init(&timer);
@@ -125,31 +136,151 @@ int main(void)
         // clock_display_time(&clock);
         // alarm_display(&alarm);
         // timer_display(&timer);
-        switch (display_mode)
+        events_catch();
+
+        if (BUTTON_EVENT_TOGGLE)
+        {
+            global_display_mode = (global_display_mode + 1) % 4;
+            global_modify_mode = 0;
+            global_modify_ptr = 0;
+            update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
+            events_clear();
+            continue;
+        }
+        if (BUTTON_EVENT_CONFIRM)
+        {
+            if (global_modify_mode)
+            {
+                global_modify_ptr++;
+                update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
+                if (global_modify_ptr > 3)
+                {
+                    global_modify_mode = 0,
+                    global_modify_ptr = 0;
+                    events_clear();
+                    continue;
+                }
+            }
+            BUTTON_EVENT_CONFIRM = 0;
+        }
+        if (BUTTON_EVENT_MODIFY)
+        {
+            if (!global_modify_mode)
+                global_modify_mode = 1,
+                global_modify_ptr = 1,
+                update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
+            events_clear();
+            continue;
+        }
+        if (BUTTON_EVENT_ADD)
+            incr = 1;
+        else if (BUTTON_EVENT_DEC)
+            incr = -1;
+
+        switch (global_display_mode)
         {
         /* Time mode */
         case 0:
-
+            clock_display_time(&clock);
+            if (global_modify_mode)
+            {
+                if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
+                {
+                    switch (global_modify_ptr)
+                    {
+                    case 1:
+                        modify_value(&clock.hour, incr, 24);
+                        break;
+                    case 2:
+                        modify_value(&clock.min, incr, 60);
+                        break;
+                    case 3:
+                        modify_value(&clock.sec, incr, 60);
+                    default:
+                        break;
+                    }
+                }
+            }
             break;
 
         /* Date mode */
         case 1:
-
+            clock_display_date(&clock);
+            if (global_modify_mode)
+            {
+                if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
+                {
+                    switch (global_modify_ptr)
+                    {
+                    case 1:
+                        modify_value(&clock.year, incr, 10000);
+                        break;
+                    case 2:
+                        modify_value(&clock.month, incr, 12);
+                        break;
+                    case 3:
+                        tmp = clock.mday - 1;
+                        modify_value(&tmp, incr, clock.days[clock.month]);
+                        clock.mday = tmp + 1;
+                    default:
+                        break;
+                    }
+                }
+            }
             break;
 
         /* Alarm mode */
         case 2:
-
+            alarm_display(&alarm);
+            if (global_modify_mode)
+            {
+                if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
+                {
+                    switch (global_modify_ptr)
+                    {
+                    case 1:
+                        modify_value(&alarm.hour, incr, 24);
+                        break;
+                    case 2:
+                        modify_value(&alarm.min, incr, 60);
+                        break;
+                    case 3:
+                        modify_value(&alarm.sec, incr, 60);
+                    default:
+                        break;
+                    }
+                }
+            }
             break;
 
         /* Countdown mode */
         case 3:
-
+            timer_display(&timer);
+            if (global_modify_mode)
+            {
+                if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
+                {
+                    switch (global_modify_ptr)
+                    {
+                    case 1:
+                        modify_value(&timer.min, incr, 60);
+                        break;
+                    case 2:
+                        modify_value(&timer.sec, incr, 60);
+                        break;
+                    case 3:
+                        modify_value(&timer.millisec, incr * 10, 1000);
+                    default:
+                        break;
+                    }
+                }
+            }
             break;
 
         default:
             break;
         }
+        events_clear();
         Delay(1000);
     }
 }
@@ -164,6 +295,33 @@ void test()
 
 void events_catch()
 {
+    static uint8_t now_val = 0xff, prev_val = 0xff;
+    now_val = I2C0_ReadByte(TCA6424_I2CADDR, TCA6424_INPUT_PORT0);
+    if (now_val != prev_val)
+    {
+        delay_ms(10);
+        now_val = I2C0_ReadByte(TCA6424_I2CADDR, TCA6424_INPUT_PORT0);
+        BUTTON_EVENT_TOGGLE = istriggered(now_val, prev_val, BUTTON_ID_TOGGLE);
+        BUTTON_EVENT_MODIFY = istriggered(now_val, prev_val, BUTTON_ID_MODIFY);
+        BUTTON_EVENT_CONFIRM = istriggered(now_val, prev_val, BUTTON_ID_CONFIRM);
+        BUTTON_EVENT_ADD = istriggered(now_val, prev_val, BUTTON_ID_ADD);
+        BUTTON_EVENT_DEC = istriggered(now_val, prev_val, BUTTON_ID_DEC);
+        prev_val = now_val;
+    }
+}
+void events_clear()
+{
+    BUTTON_EVENT_TOGGLE = 0;
+    BUTTON_EVENT_MODIFY = 0;
+    BUTTON_EVENT_CONFIRM = 0;
+    BUTTON_EVENT_ADD = 0;
+    BUTTON_EVENT_DEC = 0;
+}
+void modify_value(int *target, int incr, int bound)
+{
+    int tmp = *target;
+    tmp = (tmp + incr + bound) % bound;
+    *target = tmp;
 }
 
 /* Clock methods */
@@ -277,8 +435,8 @@ void clock_display_date(dgtclock_t *clock)
     {
         seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
         Delay(1000);
     }
 }
@@ -295,8 +453,8 @@ void clock_display_time(dgtclock_t *clock)
     {
         seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
         Delay(1000);
     }
 }
@@ -342,8 +500,8 @@ void alarm_display(alarm_t *alarm)
     {
         seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
         Delay(1000);
     }
 }
@@ -406,8 +564,8 @@ void timer_display(timer_t *timer)
     {
         seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, seg7[bits[i]] | seg_dot);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
         Delay(1000);
     }
 }
@@ -423,10 +581,9 @@ void SysTick_Handler(void)
         timer_update(&timer);
     }
 
-    if (UART_timeout != 0)
-    {
-        UART_timeout--;
-    }
+    /* Handle timeout */
+    if (global_timeout != 0)
+        global_timeout--;
 
     if (systick_1000ms_counter != 0)
     {
@@ -441,28 +598,19 @@ void SysTick_Handler(void)
         clock_update(&clock);
     }
 
-    if (systick_100ms_counter != 0)
+    if (blink_500ms_counter != 0)
     {
-        systick_100ms_counter--;
+        blink_500ms_counter--;
     }
     else
     {
-        systick_100ms_counter = SYSTICK_FREQUENCY / 10;
-        systick_100ms_status = 1;
+        blink_500ms_counter = 500;
+        update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
     }
 
-    if (systick_10ms_counter != 0)
-    {
-        systick_10ms_counter--;
-    }
-    else
-    {
-        systick_10ms_counter = SYSTICK_FREQUENCY / 100;
-        systick_10ms_status = 1;
-    }
     while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_0) == 0)
     {
-        systick_100ms_status = systick_10ms_status = 0;
+        systick_500ms_status = systick_10ms_status = 0;
         GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, GPIO_PIN_0);
     }
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0);
@@ -635,17 +783,17 @@ int execute_command(int argc, char *argv[])
         {
             if (!strcasecmp(argv[1], "time"))
             {
-                display_mode = 0;
+                global_display_mode = 0;
                 UARTStringPut("Display clock time\n");
             }
             else if (!strcasecmp(argv[1], "date"))
             {
-                display_mode = 1;
+                global_display_mode = 1;
                 UARTStringPut("Display clock date\n");
             }
             else if (!strcasecmp(argv[1], "cdown"))
             {
-                display_mode = 3;
+                global_display_mode = 3;
                 timer_enable(&timer);
                 // UARTStringPut("Display and start countdown\n");
             }
@@ -724,7 +872,7 @@ int execute_command(int argc, char *argv[])
 void UART0_Handler(void)
 {
     char buf[MAXLINE], c[1];
-    char *argv[16]; // max 16 parameters
+    char *argv[16] = {NULL}; // max 16 parameters
     int argc = 0, i;
     int32_t uart0_int_status;
 
@@ -741,11 +889,7 @@ void UART0_Handler(void)
             break;
         /* wait for the line to come to the end */
         if (!UARTCharsAvail(UART0_BASE))
-        {
-            UART_timeout = 5;
-            while (UART_timeout)
-                ;
-        }
+            delay_ms(5);
     }
 
     if (parse_command(buf, &argc, argv) != 0)
@@ -756,7 +900,8 @@ void UART0_Handler(void)
     }
 
     execute_command(argc, argv);
-
+    for (i = 0; i < argc; i++)
+        free(argv[i]);
     /* output parsed arguments for test */
     // sprintf(buf, "argc = %d\r\n", argc);
     // UARTStringPut((byte *)buf);
@@ -781,6 +926,12 @@ int lowbit(int x)
         x >>= 1;
     return k;
 }
+
+bool istriggered(uint8_t keyval, uint8_t preval, int eventid)
+{
+    return !!((~keyval) & (1 << eventid)) && !((~preval) & (1 << eventid));
+}
+
 /* Parse formatted numbers, e.g.2023-6-12, 13:54:00
  * return:  0 - valid format
  *         -1 - invalid format
@@ -807,4 +958,37 @@ int get_format_nums(char *buf, int *x, int *y, int *z)
     if (!IS_END(buf))
         return -1;
     return 0;
+}
+
+void delay_ms(int ms)
+{
+    global_timeout = ms;
+    while (global_timeout)
+        ;
+}
+
+void update_blink_mask(uint8_t *mask, int ptr)
+{
+    uint8_t tmp = *mask;
+    switch (ptr)
+    {
+    case 0:
+        tmp = 0xff;
+        break;
+    case 1:
+        tmp ^= 0x0f;
+        tmp |= ~0x0f;
+        break;
+    case 2:
+        tmp ^= 0x30;
+        tmp |= ~0x30;
+        break;
+    case 3:
+        tmp ^= 0xc0;
+        tmp |= ~0xc0;
+        break;
+    default:
+        tmp = 0xff;
+    }
+    *mask = tmp;
 }

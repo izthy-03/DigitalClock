@@ -81,4 +81,10 @@
 #define MONTH_NOV 10
 #define MONTH_DEC 11
 
+#define BUTTON_ID_TOGGLE 0
+#define BUTTON_ID_MODIFY 1
+#define BUTTON_ID_CONFIRM 1
+#define BUTTON_ID_ADD 6
+#define BUTTON_ID_DEC 7
+
 #endif
