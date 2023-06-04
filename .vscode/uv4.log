@@ -1,2 +1,8 @@
-Load "d:\\课程作业资料\\工科创II\\DigitalClock\\Objects\\DigitalClock.axf" 
-Connecting: Mode=JTAG, Speed=1000000HzErase Done.Programming Done.Verify OK.Flash Load finished at 20:47:00
+*** Using Compiler 'V5.06 update 4 (build 422)', folder: 'D:\Keil_v5\ARM\ARMCC\Bin'
+Build target 'Target 1'
+compiling main.c...
+linking...
+Program Size: Code=12492 RO-data=2628 RW-data=124 ZI-data=66324  
+FromELF: creating hex file...
+".\Objects\DigitalClock.axf" - 0 Error(s), 0 Warning(s).
+Build Time Elapsed:  00:00:01

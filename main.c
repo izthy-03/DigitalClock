@@ -45,7 +45,8 @@ typedef struct
  * 0 - time
  * 1 - date
  * 2 - alarm
- * 3 - countdown */
+ * 3 - countdown
+ * */
 volatile int global_display_mode = 0;
 
 /* Global modification mode
@@ -66,8 +67,8 @@ int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
 int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC;
 
 /* Define systick software counter */
-volatile uint16_t blink_500ms_counter, systick_500ms_counter, systick_1000ms_counter;
-volatile uint8_t systick_10ms_status, systick_500ms_status, systick_1000ms_status;
+volatile uint16_t blink_500ms_counter, systick_100ms_counter, systick_1000ms_counter;
+volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
 
 volatile int global_timeout;
 extern uint8_t seg7[40];
@@ -100,8 +101,6 @@ int execute_command(int, char **);
 /*  Event functions */
 void events_catch(void);
 void events_clear(void);
-void update_blink_mask(uint8_t *mask, int ptr);
-void modify_value(int *target, int incr, int bound);
 
 /* Util functions */
 void test(void);
@@ -109,6 +108,8 @@ int lowbit(int x);
 bool istriggered(uint8_t keyval, uint8_t preval, int eventid);
 int get_format_nums(char *buf, int *x, int *y, int *z);
 void delay_ms(int ms);
+void update_blink_mask(uint8_t *mask, int ptr);
+void modify_value(int *target, int incr, int bound);
 
 /* Create clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
@@ -132,12 +133,9 @@ int main(void)
 
     while (1)
     {
-        // clock_display_date(&clock);
-        // clock_display_time(&clock);
-        // alarm_display(&alarm);
-        // timer_display(&timer);
+        /* Catch button events */
         events_catch();
-
+        /* Handle button events */
         if (BUTTON_EVENT_TOGGLE)
         {
             global_display_mode = (global_display_mode + 1) % 4;
@@ -196,6 +194,7 @@ int main(void)
                         break;
                     case 3:
                         modify_value(&clock.sec, incr, 60);
+                        break;
                     default:
                         break;
                     }
@@ -222,9 +221,13 @@ int main(void)
                         tmp = clock.mday - 1;
                         modify_value(&tmp, incr, clock.days[clock.month]);
                         clock.mday = tmp + 1;
+                        break;
                     default:
                         break;
                     }
+                    /* Update leap year */
+                    clock_init(&clock, clock.sec, clock.min, clock.hour,
+                               clock.mday, clock.month, clock.year);
                 }
             }
             break;
@@ -246,6 +249,7 @@ int main(void)
                         break;
                     case 3:
                         modify_value(&alarm.sec, incr, 60);
+                        break;
                     default:
                         break;
                     }
@@ -270,6 +274,7 @@ int main(void)
                         break;
                     case 3:
                         modify_value(&timer.millisec, incr * 10, 1000);
+                        break;
                     default:
                         break;
                     }
@@ -304,10 +309,13 @@ void events_catch()
         BUTTON_EVENT_TOGGLE = istriggered(now_val, prev_val, BUTTON_ID_TOGGLE);
         BUTTON_EVENT_MODIFY = istriggered(now_val, prev_val, BUTTON_ID_MODIFY);
         BUTTON_EVENT_CONFIRM = istriggered(now_val, prev_val, BUTTON_ID_CONFIRM);
-        BUTTON_EVENT_ADD = istriggered(now_val, prev_val, BUTTON_ID_ADD);
-        BUTTON_EVENT_DEC = istriggered(now_val, prev_val, BUTTON_ID_DEC);
+        BUTTON_EVENT_ADD = istriggered(now_val, 0xff, BUTTON_ID_ADD);
+        BUTTON_EVENT_DEC = istriggered(now_val, 0xff, BUTTON_ID_DEC);
         prev_val = now_val;
     }
+
+    // if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
+    //     systick_100ms_status = 0;
 }
 void events_clear()
 {
@@ -577,7 +585,8 @@ void SysTick_Handler(void)
 {
     if (timer.enable)
     {
-        timer.millisec--;
+        if (!global_modify_mode || global_display_mode != 3)
+            timer.millisec--;
         timer_update(&timer);
     }
 
@@ -593,9 +602,19 @@ void SysTick_Handler(void)
     {
         systick_1000ms_counter = SYSTICK_FREQUENCY;
         systick_1000ms_status = 1;
-
-        clock.sec++;
+        if (!global_modify_mode || global_display_mode != 0)
+            clock.sec++;
         clock_update(&clock);
+    }
+
+    if (systick_100ms_counter != 0)
+    {
+        systick_100ms_counter--;
+    }
+    else
+    {
+        systick_100ms_counter = 100;
+        systick_100ms_status = 1;
     }
 
     if (blink_500ms_counter != 0)
@@ -610,7 +629,7 @@ void SysTick_Handler(void)
 
     while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_0) == 0)
     {
-        systick_500ms_status = systick_10ms_status = 0;
+        systick_100ms_status = systick_10ms_status = 0;
         GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, GPIO_PIN_0);
     }
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0);
@@ -635,7 +654,7 @@ int parse_command(char *cmd, int *argc, char *argv[])
         {
             argv[k] = (char *)malloc(len + 5);
             strncpy(argv[k], cmd, len);
-            strcat(argv[k], "\0");
+            argv[k][len] = '\0';
             (*argc)++;
             cmd += len;
             SKIP_BLANK(cmd);
@@ -743,6 +762,7 @@ int execute_command(int argc, char *argv[])
                     UARTStringPut("Invalid time\n");
                     return -1;
                 }
+                global_display_mode = 0;
                 UARTStringPut("Clock time set successfully\n");
             }
             else if (!strcasecmp(argv[1], "date"))
@@ -752,6 +772,7 @@ int execute_command(int argc, char *argv[])
                     UARTStringPut("Invalid date\n");
                     return -1;
                 }
+                global_display_mode = 1;
                 UARTStringPut("Clock date set successfully\n");
             }
             else if (!strcasecmp(argv[1], "alarm"))
@@ -761,6 +782,7 @@ int execute_command(int argc, char *argv[])
                     UARTStringPut("Invalid alarm time\n");
                     return -1;
                 }
+                global_display_mode = 2;
                 UARTStringPut("Alarm time set successfully\n");
             }
             return 0;
@@ -797,6 +819,8 @@ int execute_command(int argc, char *argv[])
                 timer_enable(&timer);
                 // UARTStringPut("Display and start countdown\n");
             }
+            global_modify_mode = 0;
+            global_modify_ptr = 0;
             return 0;
         }
         else
@@ -872,7 +896,7 @@ int execute_command(int argc, char *argv[])
 void UART0_Handler(void)
 {
     char buf[MAXLINE], c[1];
-    char *argv[16] = {NULL}; // max 16 parameters
+    static char *argv[16] = {NULL}; // max 16 parameters
     int argc = 0, i;
     int32_t uart0_int_status;
 
@@ -900,16 +924,18 @@ void UART0_Handler(void)
     }
 
     execute_command(argc, argv);
-    for (i = 0; i < argc; i++)
-        free(argv[i]);
+
     /* output parsed arguments for test */
     // sprintf(buf, "argc = %d\r\n", argc);
     // UARTStringPut((byte *)buf);
     // for (i = 0; i < argc; i++)
     // {
     //     UARTStringPut((byte *)argv[i]);
-    //     UARTStringPut("\r\n");
+    //     UARTStringPut("\n");
     // }
+    for (i = 0; i < argc; i++)
+        free(argv[i]);
+
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
     while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0)
         GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);

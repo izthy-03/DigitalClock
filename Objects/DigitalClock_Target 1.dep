@@ -1,5 +1,5 @@
 Dependencies for Project 'DigitalClock', Target 'Target 1': (DO NOT MODIFY !)
-F (.\main.c)(0x647C87BA)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
+F (.\main.c)(0x647C9D8F)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
 I (initialize.h)(0x6479F80E)
 I (headers.h)(0x647C7667)
 I (D:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x57F606B8)
