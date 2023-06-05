@@ -41,6 +41,13 @@ typedef struct
     bool enable;
 } timer_t;
 
+typedef struct
+{
+    int notelen;
+    int *notes;
+    int *notetime;
+} music_t;
+
 /* Global display mode
  * 0 - time
  * 1 - date
@@ -63,15 +70,19 @@ volatile int global_modify_ptr = 0;
 volatile uint8_t global_blink_mask = 0xff;
 
 /* Global button events */
-int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
-int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC;
+volatile int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
+volatile int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC, BUTTON_EVENT_ENABLE;
+volatile int BUTTON_EVENT_USR0_PRESSED;
 
 /* Define systick software counter */
-volatile uint16_t blink_500ms_counter, systick_100ms_counter, systick_1000ms_counter;
-volatile uint8_t systick_10ms_status, systick_100ms_status, systick_1000ms_status;
+volatile uint16_t blink_500ms_counter, systick_500ms_counter, systick_1000ms_counter;
+volatile uint8_t systick_10ms_status, systick_500ms_status, systick_1000ms_status;
 
-volatile int global_timeout;
+volatile int global_timeout, buzzer_last_time;
 extern uint8_t seg7[40];
+extern uint32_t ui32SysClock;
+
+/* Function prototypes */
 
 /* Clock functions */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, int year);
@@ -88,19 +99,25 @@ void alarm_init(alarm_t *alarm);
 int alarm_set(alarm_t *alarm, int sec, int min, int hour);
 void alarm_get(alarm_t *alarm, char *buf);
 void alarm_display(alarm_t *alarm);
+void alarm_go_off(alarm_t *alarm, dgtclock_t *clock);
 
 /* Timer functions */
 void timer_init(timer_t *timer);
 void timer_update(timer_t *timer);
 void timer_display(timer_t *timer);
+void timer_go_off(timer_t *timer);
 
-/* Command functions */
+/* Serial command functions */
 int parse_command(char *cmd, int *argc, char *argv[]);
-int execute_command(int, char **);
+int execute_command(int argc, char *argv[]);
 
 /*  Event functions */
 void events_catch(void);
 void events_clear(void);
+void start_up(void);
+
+/* Buzzer functions */
+void buzzer_on(int freq, int time_ms);
 
 /* Util functions */
 void test(void);
@@ -110,11 +127,15 @@ int get_format_nums(char *buf, int *x, int *y, int *z);
 void delay_ms(int ms);
 void update_blink_mask(uint8_t *mask, int ptr);
 void modify_value(int *target, int incr, int bound);
+void led_show_info(void);
 
 /* Create clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
 alarm_t alarm;
 timer_t timer;
+/* Create C-major pitch instance */
+pitch_t C_major;
+/* Create music instances */
 
 int main(void)
 {
@@ -123,11 +144,13 @@ int main(void)
 
     IO_initialize();
     test();
-
+    sprintf(buf, "SystemClock = %d\n", ui32SysClock);
+    UARTStringPut((byte *)buf);
     clock_init(&clock, 59, 00, 8, 11, 5, 2023);
     alarm_init(&alarm);
     timer_init(&timer);
 
+    start_up();
     clock_get_date(&clock, buf);
     UARTStringPut((byte *)buf);
 
@@ -135,14 +158,16 @@ int main(void)
     {
         /* Catch button events */
         events_catch();
+        led_show_info();
+        alarm_go_off(&alarm, &clock);
         /* Handle button events */
         if (BUTTON_EVENT_TOGGLE)
         {
-            global_display_mode = (global_display_mode + 1) % 4;
+            if (!global_modify_mode)
+                global_display_mode = (global_display_mode + 1) % 4;
             global_modify_mode = 0;
             global_modify_ptr = 0;
             update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
-            events_clear();
             continue;
         }
         if (BUTTON_EVENT_CONFIRM)
@@ -155,7 +180,6 @@ int main(void)
                 {
                     global_modify_mode = 0,
                     global_modify_ptr = 0;
-                    events_clear();
                     continue;
                 }
             }
@@ -167,7 +191,6 @@ int main(void)
                 global_modify_mode = 1,
                 global_modify_ptr = 1,
                 update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
-            events_clear();
             continue;
         }
         if (BUTTON_EVENT_ADD)
@@ -255,6 +278,13 @@ int main(void)
                     }
                 }
             }
+            if (BUTTON_EVENT_ENABLE)
+            {
+                alarm.enable = !alarm.enable;
+                sprintf(buf, "%s\n",
+                        alarm.enable ? "Alarm is enabled now" : "Alarm is disabled");
+                UARTStringPut((byte *)buf);
+            }
             break;
 
         /* Countdown mode */
@@ -280,6 +310,14 @@ int main(void)
                     }
                 }
             }
+            if (BUTTON_EVENT_ENABLE)
+            {
+                global_modify_mode = global_modify_ptr = 0;
+                timer.enable = !timer.enable;
+                sprintf(buf, "%s\n",
+                        timer.enable ? " Start countdown" : "Pause countdown");
+                UARTStringPut((byte *)buf);
+            }
             break;
 
         default:
@@ -298,24 +336,66 @@ void test()
     UARTStringPut((byte *)buf);
 }
 
+void start_up()
+{
+    pitch_t notes[14] = {C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5};
+    int note_time[14] = {400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400};
+    int student_id[8] = {2, 1, 9, 1, 1, 1, 0, 1};
+    int i;
+    uint8_t mask = 0x80;
+    for (i = 0; i < 7; i++)
+        buzzer_on(notes[i], 100);
+
+    global_modify_mode = global_modify_ptr = 1;
+    global_timeout = 3000;
+    while (global_timeout)
+    {
+        for (i = 0, mask = 0x80; i < 8; i++, mask >>= 1)
+        {
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[student_id[8 - i - 1]]));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask);
+            Delay(1000);
+            if (global_blink_mask != 0xff)
+                I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0x00);
+            else
+                I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0xff);
+        }
+    }
+    I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0xff);
+    global_modify_mode = global_modify_ptr = 0;
+}
+
 void events_catch()
 {
     static uint8_t now_val = 0xff, prev_val = 0xff;
+    static int prev_pin0 = 1, now_pin0;
+    events_clear();
+    /* Handle button events on blue panel */
     now_val = I2C0_ReadByte(TCA6424_I2CADDR, TCA6424_INPUT_PORT0);
     if (now_val != prev_val)
     {
-        delay_ms(10);
+        delay_ms(20);
         now_val = I2C0_ReadByte(TCA6424_I2CADDR, TCA6424_INPUT_PORT0);
         BUTTON_EVENT_TOGGLE = istriggered(now_val, prev_val, BUTTON_ID_TOGGLE);
         BUTTON_EVENT_MODIFY = istriggered(now_val, prev_val, BUTTON_ID_MODIFY);
         BUTTON_EVENT_CONFIRM = istriggered(now_val, prev_val, BUTTON_ID_CONFIRM);
-        BUTTON_EVENT_ADD = istriggered(now_val, 0xff, BUTTON_ID_ADD);
-        BUTTON_EVENT_DEC = istriggered(now_val, 0xff, BUTTON_ID_DEC);
+        BUTTON_EVENT_ADD = istriggered(now_val, prev_val, BUTTON_ID_ADD);
+        BUTTON_EVENT_DEC = istriggered(now_val, prev_val, BUTTON_ID_DEC);
+        BUTTON_EVENT_ENABLE = istriggered(now_val, prev_val, BUTTON_ID_ENABLE);
         prev_val = now_val;
     }
-
-    // if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
-    //     systick_100ms_status = 0;
+    /* Handle button events on red panel */
+    now_pin0 = GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_0);
+    if (now_pin0 != prev_pin0)
+    {
+        delay_ms(5);
+        if (!now_pin0)
+            BUTTON_EVENT_USR0_PRESSED = 1;
+        else
+            BUTTON_EVENT_USR0_PRESSED = 0;
+        prev_pin0 = now_pin0;
+    }
 }
 void events_clear()
 {
@@ -324,12 +404,22 @@ void events_clear()
     BUTTON_EVENT_CONFIRM = 0;
     BUTTON_EVENT_ADD = 0;
     BUTTON_EVENT_DEC = 0;
+    BUTTON_EVENT_ENABLE = 0;
 }
-void modify_value(int *target, int incr, int bound)
+
+/* Turn on the buzzer. Rest when freq = 0 */
+void buzzer_on(int freq, int time_ms)
 {
-    int tmp = *target;
-    tmp = (tmp + incr + bound) % bound;
-    *target = tmp;
+    if (freq != 0)
+    {
+        PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32SysClock / freq);
+        PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / freq / 100);
+        PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
+    }
+    buzzer_last_time = time_ms;
+    while (buzzer_last_time)
+        ;
+    PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, false);
 }
 
 /* Clock methods */
@@ -513,6 +603,29 @@ void alarm_display(alarm_t *alarm)
         Delay(1000);
     }
 }
+void alarm_go_off(alarm_t *alarm, dgtclock_t *clock)
+{
+    pitch_t notes[7] = {C4, D4, E4, F4, G4, A4, B4};
+    int i = 6;
+    if (!alarm->enable || alarm->hour != clock->hour ||
+        alarm->min != clock->min || alarm->sec != clock->sec)
+        return;
+    global_display_mode = 2;
+    global_modify_mode = global_modify_ptr = 0;
+    global_timeout = 5000;
+    while (global_timeout && !BUTTON_EVENT_ENABLE)
+    {
+        events_catch();
+        if (systick_500ms_status)
+            alarm_display(alarm);
+        else
+            I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0x00);
+        buzzer_on(notes[i], 100);
+        i = (i - 1 + 7) % 7;
+    }
+    events_clear();
+    global_timeout = 0;
+}
 
 /* Timer methods */
 void timer_init(timer_t *timer)
@@ -583,6 +696,35 @@ void timer_display(timer_t *timer)
 */
 void SysTick_Handler(void)
 {
+    static uint32_t timestamp = 0, duration = 0;
+    char buf[MAXLINE];
+    timestamp++;
+
+    /* Handle button counter on red panel */
+    if (BUTTON_EVENT_USR0_PRESSED)
+    {
+        if (!duration)
+        {
+            sprintf(buf, "USR0_BUTTON pressed at %d.%03ds\n", timestamp / 1000, timestamp % 1000);
+            UARTStringPut((byte *)buf);
+        }
+        duration++;
+        GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, GPIO_PIN_0);
+    }
+    else
+    {
+        if (duration)
+        {
+            sprintf(buf, "USR0_BUTTON released at %d.%03ds\nDuration time: %d.%03ds\n\n",
+                    timestamp / 1000, timestamp % 1000,
+                    duration / 1000, duration % 1000);
+            UARTStringPut((byte *)buf);
+        }
+        duration = 0;
+        GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0);
+    }
+
+    /* Whether run countdown */
     if (timer.enable)
     {
         if (!global_modify_mode || global_display_mode != 3)
@@ -593,6 +735,8 @@ void SysTick_Handler(void)
     /* Handle timeout */
     if (global_timeout != 0)
         global_timeout--;
+    if (buzzer_last_time != 0)
+        buzzer_last_time--;
 
     if (systick_1000ms_counter != 0)
     {
@@ -607,16 +751,16 @@ void SysTick_Handler(void)
         clock_update(&clock);
     }
 
-    if (systick_100ms_counter != 0)
+    if (systick_500ms_counter != 0)
     {
-        systick_100ms_counter--;
+        systick_500ms_counter--;
     }
     else
     {
-        systick_100ms_counter = 100;
-        systick_100ms_status = 1;
+        systick_500ms_counter = 500;
+        systick_500ms_status ^= 1;
     }
-
+    /* Update blink count */
     if (blink_500ms_counter != 0)
     {
         blink_500ms_counter--;
@@ -626,13 +770,6 @@ void SysTick_Handler(void)
         blink_500ms_counter = 500;
         update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
     }
-
-    while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_0) == 0)
-    {
-        systick_100ms_status = systick_10ms_status = 0;
-        GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, GPIO_PIN_0);
-    }
-    GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_0, 0);
 }
 
 /* Parse the command string received
@@ -782,7 +919,7 @@ int execute_command(int argc, char *argv[])
                     UARTStringPut("Invalid alarm time\n");
                     return -1;
                 }
-                global_display_mode = 2;
+                // global_display_mode = 2;
                 UARTStringPut("Alarm time set successfully\n");
             }
             return 0;
@@ -872,7 +1009,7 @@ int execute_command(int argc, char *argv[])
             else if (!strcasecmp(argv[1], "cdown"))
             {
                 timer.enable = false;
-                UARTStringPut("Stop countdown\n");
+                UARTStringPut("Pause countdown\n");
             }
             return 0;
         }
@@ -937,8 +1074,8 @@ void UART0_Handler(void)
         free(argv[i]);
 
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
-    while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0)
-        GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
+    // while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0)
+    //     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
 }
 
@@ -1017,4 +1154,20 @@ void update_blink_mask(uint8_t *mask, int ptr)
         tmp = 0xff;
     }
     *mask = tmp;
+}
+void modify_value(int *target, int incr, int bound)
+{
+    int tmp = *target;
+    tmp = (tmp + incr + bound) % bound;
+    *target = tmp;
+}
+
+void led_show_info()
+{
+    uint8_t leds = 0x00;
+    leds |= ((uint8_t)0x01 << global_display_mode) &
+            (global_blink_mask == 0xff ? 0xff : 0x00);
+    leds |= alarm.enable ? 0x40 : 0x00;
+    leds |= (timer.enable && systick_500ms_status ? 0x80 : 0x00);
+    I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, ~leds);
 }

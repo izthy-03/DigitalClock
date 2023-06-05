@@ -7,6 +7,7 @@
 .\objects\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
 .\objects\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 .\objects\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\ctype.h
+.\objects\main.o: D:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
 .\objects\main.o: .\inc\hw_memmap.h
 .\objects\main.o: .\driverlib\debug.h
 .\objects\main.o: .\driverlib\gpio.h
@@ -19,3 +20,4 @@
 .\objects\main.o: .\driverlib\interrupt.h
 .\objects\main.o: .\driverlib\uart.h
 .\objects\main.o: .\inc\hw_ints.h
+.\objects\main.o: .\driverlib\pwm.h

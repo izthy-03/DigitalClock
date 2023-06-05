@@ -43,6 +43,8 @@ void IO_initialize()
 
     ui32IntPriorityUart0 = IntPriorityGet(INT_UART0);
     ui32IntPrioritySystick = IntPriorityGet(FAULT_SYSTICK);
+
+    PWM_Init();
 }
 
 void Delay(uint32_t value)
@@ -168,4 +170,26 @@ uint8_t I2C0_ReadByte(uint8_t DevAddr, uint8_t RegAddr)
     value = I2CMasterDataGet(I2C0_BASE);
     Delay(1000);
     return value;
+}
+
+void PWM_Init(void)
+{
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_PWM0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOK); // Enable PortK
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOK))
+        ; // Wait for the GPIO moduleK ready
+
+    GPIOPinTypeGPIOOutput(GPIO_PORTK_BASE, GPIO_PIN_5); // Set PK5 as Output pin
+
+    GPIOPadConfigSet(GPIO_PORTK_BASE, GPIO_PIN_5, GPIO_STRENGTH_4MA, GPIO_PIN_TYPE_STD_WPU);
+
+    GPIOPinConfigure(GPIO_PK5_M0PWM7);
+
+    GPIOPinTypePWM(GPIO_PORTK_BASE, GPIO_PIN_5);
+    PWMGenConfigure(PWM0_BASE, PWM_GEN_3, PWM_GEN_MODE_UP_DOWN | PWM_GEN_MODE_NO_SYNC);
+
+    PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, 4000);
+    PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, 4000 / 4);
+    PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
+    PWMGenEnable(PWM0_BASE, PWM_GEN_3);
 }

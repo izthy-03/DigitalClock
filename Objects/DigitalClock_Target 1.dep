@@ -1,13 +1,14 @@
 Dependencies for Project 'DigitalClock', Target 'Target 1': (DO NOT MODIFY !)
-F (.\main.c)(0x647C9D8F)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
-I (initialize.h)(0x6479F80E)
-I (headers.h)(0x647C7667)
+F (.\main.c)(0x647D770D)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\main.o --omf_browse .\objects\main.crf --depend .\objects\main.d)
+I (initialize.h)(0x647CD679)
+I (headers.h)(0x647CE09D)
 I (D:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdbool.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\string.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\ctype.h)(0x57F606B6)
+I (D:\Keil_v5\ARM\ARMCC\include\math.h)(0x57F606B6)
 I (.\inc\hw_memmap.h)(0x5AEF2680)
 I (.\driverlib\debug.h)(0x5AEF2680)
 I (.\driverlib\gpio.h)(0x5AEF2680)
@@ -20,15 +21,17 @@ I (.\driverlib\systick.h)(0x5AEF2680)
 I (.\driverlib\interrupt.h)(0x5AEF2680)
 I (.\driverlib\uart.h)(0x5AEF2680)
 I (.\inc\hw_ints.h)(0x5AEF2680)
-F (.\initialize.c)(0x647A0DD3)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\initialize.o --omf_browse .\objects\initialize.crf --depend .\objects\initialize.d)
-I (initialize.h)(0x6479F80E)
-I (headers.h)(0x647C7667)
+I (.\driverlib\pwm.h)(0x5AEF2680)
+F (.\initialize.c)(0x647CD684)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\initialize.o --omf_browse .\objects\initialize.crf --depend .\objects\initialize.d)
+I (initialize.h)(0x647CD679)
+I (headers.h)(0x647CE09D)
 I (D:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdbool.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdio.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\stdlib.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\string.h)(0x57F606B8)
 I (D:\Keil_v5\ARM\ARMCC\include\ctype.h)(0x57F606B6)
+I (D:\Keil_v5\ARM\ARMCC\include\math.h)(0x57F606B6)
 I (.\inc\hw_memmap.h)(0x5AEF2680)
 I (.\driverlib\debug.h)(0x5AEF2680)
 I (.\driverlib\gpio.h)(0x5AEF2680)
@@ -41,9 +44,10 @@ I (.\driverlib\systick.h)(0x5AEF2680)
 I (.\driverlib\interrupt.h)(0x5AEF2680)
 I (.\driverlib\uart.h)(0x5AEF2680)
 I (.\inc\hw_ints.h)(0x5AEF2680)
+I (.\driverlib\pwm.h)(0x5AEF2680)
 F (.\driverlib\rvmdk\driverlib.lib)(0x5AEF2680)()
-F (.\headers.h)(0x647C7667)()
-F (.\initialize.h)(0x6479F80E)()
+F (.\headers.h)(0x647CE09D)()
+F (.\initialize.h)(0x647CD679)()
 F (RTE\Device\TM4C1294NCPDT\startup_TM4C129.s)(0x647A1D7A)(--cpu Cortex-M4.fp --pd "__EVAL SETA 1" -g --apcs=interwork -Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include--pd "__UVISION_VERSION SETA 522" --pd "_RTE_ SETA 1" --pd "TM4C1294NCPDT SETA 1"--list .\listings\startup_tm4c129.lst --xref -o .\objects\startup_tm4c129.o --depend .\objects\startup_tm4c129.d)
 F (RTE\Device\TM4C1294NCPDT\system_TM4C129.c)(0x525357C4)(-c --cpu Cortex-M4.fp -D__EVAL -g -O0 --apcs=interwork --split_sections -I .\inc -I .\driverlib-Id:\课程作业资料\工科创II\DigitalClock\RTE\_Target_1-ID:\Keil_v5\ARM\PACK\Keil\TM4C_DFP\1.1.0\Device\Include\TM4C129-ID:\Keil_v5\ARM\CMSIS\Include-D__UVISION_VERSION="522" -D_RTE_ -DTM4C1294NCPDT -DPART_TM4C1294NCPDT-o .\objects\system_tm4c129.o --omf_browse .\objects\system_tm4c129.crf --depend .\objects\system_tm4c129.d)
 I (D:\Keil_v5\ARM\ARMCC\include\stdint.h)(0x57F606B8)

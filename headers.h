@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
 #include "hw_memmap.h"
 #include "debug.h"
 #include "gpio.h"
@@ -19,6 +20,7 @@
 #include "interrupt.h"
 #include "uart.h"
 #include "hw_ints.h"
+#include "pwm.h"
 
 #define SYSTICK_FREQUENCY 1000 // 1000hz
 
@@ -81,10 +83,33 @@
 #define MONTH_NOV 10
 #define MONTH_DEC 11
 
+/* Button ids corresponding to respective button events */
 #define BUTTON_ID_TOGGLE 0
 #define BUTTON_ID_MODIFY 1
 #define BUTTON_ID_CONFIRM 1
 #define BUTTON_ID_ADD 6
 #define BUTTON_ID_DEC 7
+#define BUTTON_ID_ENABLE 4
+
+/* Pitch frequecy(Hz) */
+typedef enum
+{
+    Re = 0,
+    C4 = 261,
+    D4 = 294,
+    E4 = 330,
+    F4 = 349,
+    G4 = 392,
+    A4 = 440,
+    B4 = 494,
+
+    C5 = 523,
+    D5 = 587,
+    E5 = 659,
+    F5 = 698,
+    G5 = 784,
+    A5 = 880,
+    B5 = 988
+} pitch_t;
 
 #endif

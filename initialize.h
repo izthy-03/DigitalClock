@@ -4,7 +4,7 @@
 #include "headers.h"
 
 void IO_initialize(void);
-
+void PWM_Init(void);
 void Delay(uint32_t value);
 void S800_GPIO_Init(void);
 uint8_t I2C0_WriteByte(uint8_t DevAddr, uint8_t RegAddr, uint8_t WriteData);
