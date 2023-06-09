@@ -1,2 +1,25 @@
-Load "d:\\课程作业资料\\工科创II\\DigitalClock\\Objects\\DigitalClock.axf" 
-Connecting: Mode=JTAG, Speed=1000000HzErase Done.Programming Done.Verify OK.Flash Load finished at 16:30:05
+*** Using Compiler 'V5.06 update 4 (build 422)', folder: 'D:\Keil_v5\ARM\ARMCC\Bin'
+Build target 'Target 1'
+compiling main.c...
+.\driverlib\hibernate.h(229): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarSet(struct tm *psTime);
+.\driverlib\hibernate.h(230): warning:  #231-D: declaration is not visible outside of function
+  extern int HibernateCalendarGet(struct tm *psTime);
+.\driverlib\hibernate.h(231): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarMatchSet(uint32_t ui32Index, struct tm *psTime);
+.\driverlib\hibernate.h(232): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarMatchGet(uint32_t ui32Index, struct tm *psTime);
+main.c(330): warning:  #167-D: argument of type "int *" is incompatible with parameter of type "uint32_t *"
+          HibernateDataGet(tmp + i, 1);
+main.c(332): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+          UARTStringPut(buf);
+main.c(338): warning:  #177-D: variable "notes"  was declared but never referenced
+      pitch_t notes[14] = {C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5};
+main.c(339): warning:  #177-D: variable "note_time"  was declared but never referenced
+      int note_time[14] = {400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400};
+main.c: 8 warnings, 0 errors
+linking...
+Program Size: Code=15632 RO-data=2800 RW-data=156 ZI-data=66580  
+FromELF: creating hex file...
+".\Objects\DigitalClock.axf" - 0 Error(s), 8 Warning(s).
+Build Time Elapsed:  00:00:01

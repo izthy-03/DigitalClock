@@ -3,6 +3,15 @@
 
 #include "headers.h"
 
+extern uint32_t ui32SysClock, ui32IntPriorityGroup, ui32IntPriorityMask;
+extern uint32_t ui32IntPrioritySystick, ui32IntPriorityUart0;
+
+extern uint8_t seg7[40];
+extern uint8_t uart_receive_char;
+
+extern uint32_t ui32Status;
+extern uint32_t pui32NVData[64];
+
 void IO_initialize(void);
 void PWM_Init(void);
 void Delay(uint32_t value);

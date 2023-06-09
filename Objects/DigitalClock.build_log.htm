@@ -27,7 +27,7 @@ Project File Date:  06/02/2023
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 4 (build 422)', folder: 'D:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'Target 1'
-compiling initialize.c...
+compiling main.c...
 .\driverlib\hibernate.h(229): warning:  #231-D: declaration is not visible outside of function
   extern void HibernateCalendarSet(struct tm *psTime);
 .\driverlib\hibernate.h(230): warning:  #231-D: declaration is not visible outside of function
@@ -36,17 +36,19 @@ compiling initialize.c...
   extern void HibernateCalendarMatchSet(uint32_t ui32Index, struct tm *psTime);
 .\driverlib\hibernate.h(232): warning:  #231-D: declaration is not visible outside of function
   extern void HibernateCalendarMatchGet(uint32_t ui32Index, struct tm *psTime);
-initialize.c(113): warning:  #550-D: variable "result"  was set but never used
-      uint8_t result;
-initialize.c(158): warning:  #550-D: variable "rop"  was set but never used
-      uint8_t value, rop;
-initialize.c(268): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
-      UARTStringPut(buf);
-initialize.c: 7 warnings, 0 errors
+main.c(330): warning:  #167-D: argument of type "int *" is incompatible with parameter of type "uint32_t *"
+          HibernateDataGet(tmp + i, 1);
+main.c(332): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+          UARTStringPut(buf);
+main.c(338): warning:  #177-D: variable "notes"  was declared but never referenced
+      pitch_t notes[14] = {C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5};
+main.c(339): warning:  #177-D: variable "note_time"  was declared but never referenced
+      int note_time[14] = {400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400};
+main.c: 8 warnings, 0 errors
 linking...
-Program Size: Code=15204 RO-data=2832 RW-data=156 ZI-data=66580  
+Program Size: Code=15632 RO-data=2800 RW-data=156 ZI-data=66580  
 FromELF: creating hex file...
-".\Objects\DigitalClock.axf" - 0 Error(s), 7 Warning(s).
+".\Objects\DigitalClock.axf" - 0 Error(s), 8 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -63,10 +65,10 @@ Package Vendor: Keil
 <h2>Collection of Component Files used:</h2>
 
    * Component: Keil::Device:Startup:1.0.0
-      Source file:   Device\Source\system_TM4C129.c
-      Source file:   Device\Source\ARM\startup_TM4C129.s
       Include file:  Device\Include\TM4C129\TM4C129.h
-Build Time Elapsed:  00:00:00
+      Source file:   Device\Source\ARM\startup_TM4C129.s
+      Source file:   Device\Source\system_TM4C129.c
+Build Time Elapsed:  00:00:01
 </pre>
 </body>
 </html>

@@ -92,6 +92,15 @@
 #define BUTTON_ID_DEC 7
 #define BUTTON_ID_ENABLE 4
 
+/* Define Hibernation data storage index */
+#define HBN_VERIFY 0x00
+#define HBN_RTC 0x01
+#define HBN_CLOCK 0x02
+#define HBN_ALARM 0x03
+#define HBN_TIMER 0x04
+/* Define verify code */
+#define HBN_CODE_VERIFY 21911101
+
 /* Pitch frequecy(Hz) */
 typedef enum
 {

@@ -81,8 +81,13 @@ volatile uint8_t systick_10ms_status, systick_500ms_status, systick_1000ms_statu
 volatile int global_timeout, buzzer_last_time;
 extern uint8_t seg7[40];
 extern uint32_t ui32SysClock;
+extern uint32_t pui32NVData[64];
 
 /* Function prototypes */
+
+/* Hibernation methods */
+void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer);
+void hibernation_data_store(dgtclock_t *clock, alarm_t *alarm, timer_t *timer);
 
 /* Clock methods */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, int year);
@@ -96,7 +101,7 @@ void clock_display_time(dgtclock_t *clock);
 void clock_button_increase(dgtclock_t *clock, int incr, int ptr);
 
 /* Alarm methods */
-void alarm_init(alarm_t *alarm);
+void alarm_init(alarm_t *alarm, int sec, int min, int hour);
 int alarm_set(alarm_t *alarm, int sec, int min, int hour);
 void alarm_get(alarm_t *alarm, char *buf);
 void alarm_display(alarm_t *alarm);
@@ -104,7 +109,7 @@ void alarm_go_off(alarm_t *alarm, dgtclock_t *clock);
 void alarm_button_increase(alarm_t *alarm, int incr, int ptr);
 
 /* Timer methods */
-void timer_init(timer_t *timer);
+void timer_init(timer_t *timer, int millisec, int sec, int min);
 void timer_update(timer_t *timer);
 void timer_display(timer_t *timer);
 void timer_go_off(timer_t *timer);
@@ -145,11 +150,10 @@ int main(void)
     test();
     sprintf(buf, "SystemClock = %d\n", ui32SysClock);
     UARTStringPut((byte *)buf);
-    clock_init(&clock, 59, 00, 8, 11, 5, 2023);
-    alarm_init(&alarm);
-    timer_init(&timer);
 
+    hibernation_wakeup_init(&clock, &alarm, &timer);
     start_up();
+
     clock_get_date(&clock, buf);
     UARTStringPut((byte *)buf);
 
@@ -273,6 +277,62 @@ void test()
     UARTStringPut((byte *)buf);
 }
 
+/* Wake from hibernation. Read data from memory */
+void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
+{
+    int i, c, a, t, mask = 0xffff;
+    for (i = 0; i < 5; i++)
+        HibernateDataGet(pui32NVData + i, 1);
+
+    if (pui32NVData[HBN_VERIFY] != HBN_CODE_VERIFY)
+    {
+        pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
+        clock_init(clock, 59, 00, 8, 11, 5, 2023);
+        alarm_init(alarm, 3, 0, 8);
+        timer_init(timer, 233, 13, 0);
+        HibernateRTCSet(0);
+        hibernation_data_store(clock, alarm, timer);
+    }
+    else
+    {
+        c = pui32NVData[HBN_CLOCK];
+        a = pui32NVData[HBN_ALARM];
+        t = pui32NVData[HBN_TIMER];
+        clock_init(clock, (c & mask), (c >> 4) & mask, (c >> 8) & mask, (c >> 12) & mask,
+                   (c >> 16) & mask, (c >> 20) & mask);
+        clock->sec += HibernateRTCGet() - pui32NVData[HBN_RTC];
+        clock_update(clock);
+
+        alarm_init(alarm, (a & mask), (a >> 4) & mask, (a >> 8) & mask);
+        timer_init(timer, (t & mask), (t >> 4) & mask, (t >> 8) & mask);
+    }
+}
+
+void hibernation_data_store(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
+{
+    char buf[MAXLINE];
+    int i, tmp[16];
+    pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
+    pui32NVData[HBN_RTC] = HibernateRTCGet();
+    pui32NVData[HBN_CLOCK] = (clock->sec) | (clock->min << 4) | (clock->hour << 8) |
+                             (clock->mday << 12) | (clock->month << 16) | (clock->year << 20);
+    pui32NVData[HBN_ALARM] = (alarm->sec) | (alarm->min << 4) | (alarm->hour << 8) |
+                             (alarm->enable << 12);
+    pui32NVData[HBN_TIMER] = (timer->millisec) | (timer->sec << 4) | (timer->min << 8) |
+                             (timer->enable << 12);
+
+    for (i = 0; i < 5; i++)
+        HibernateDataSet(pui32NVData + i, 1);
+
+    UARTStringPut("\n[log] store success\n");
+    for (i = 0; i < 5; i++)
+    {
+        HibernateDataGet(tmp + i, 1);
+        sprintf(buf, "exp = 0x%x, p[%d] = 0x%x\n", pui32NVData[i], i, tmp[i]);
+        UARTStringPut(buf);
+    }
+}
+
 void start_up()
 {
     pitch_t notes[14] = {C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5};
@@ -280,8 +340,8 @@ void start_up()
     int student_id[8] = {2, 1, 9, 1, 1, 1, 0, 1};
     int i;
     uint8_t mask = 0x80;
-    for (i = 0; i < 7; i++)
-        buzzer_on(notes[i], 100);
+    // for (i = 0; i < 7; i++)
+    //     buzzer_on(notes[i], 100);
 
     global_modify_mode = global_modify_ptr = 1;
     global_timeout = 3000;
@@ -302,22 +362,22 @@ void start_up()
     I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0xff);
     global_modify_mode = global_modify_ptr = 0;
 
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
-    UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
+    // UARTStringPut("                                                                   \n");
 }
 
 void events_catch()
@@ -420,19 +480,19 @@ void clock_update(dgtclock_t *clock)
         clock->mday += clock->hour / 24;
         clock->hour %= 24;
     }
-    if (clock->yday >= 365 + clock->isleap)
+    while (clock->yday >= 365 + clock->isleap)
     {
         clock->year += 1;
-        clock->yday = 0;
-        clock->mday = 1;
+        clock->yday -= 365 + clock->isleap;
+        clock->mday = clock->yday + 1;
         clock->month = 0;
         clock->isleap = (clock->year % 100 && clock->year % 4 == 0) ||
                         (clock->year % 400 == 0);
         clock->days[MONTH_FEB] = 28 + clock->isleap;
     }
-    if (clock->mday > clock->days[clock->month])
+    while (clock->mday > clock->days[clock->month])
     {
-        clock->mday = 1;
+        clock->mday -= clock->days[clock->month];
         clock->month += 1;
     }
 }
@@ -555,12 +615,12 @@ void clock_button_increase(dgtclock_t *clock, int incr, int ptr)
 /* ================================================================
  * Alarm methods
  * ================================================================ */
-void alarm_init(alarm_t *alarm)
+void alarm_init(alarm_t *alarm, int sec, int min, int hour)
 {
     alarm->enable = false;
-    alarm->hour = 8;
-    alarm->min = 2;
-    alarm->sec = 0;
+    alarm->hour = hour;
+    alarm->min = min;
+    alarm->sec = sec;
 }
 /* Set alarm time
  *  0 - set ok
@@ -649,12 +709,12 @@ void alarm_button_increase(alarm_t *alarm, int incr, int ptr)
 /* ================================================================
  * Timer methods
  * ================================================================ */
-void timer_init(timer_t *timer)
+void timer_init(timer_t *timer, int millisec, int sec, int min)
 {
     timer->enable = false;
-    timer->millisec = 233;
-    timer->sec = 13;
-    timer->min = 0;
+    timer->millisec = millisec;
+    timer->sec = sec;
+    timer->min = min;
 }
 /* Update timer when counting down */
 void timer_update(timer_t *timer)
@@ -792,6 +852,7 @@ void SysTick_Handler(void)
         if (!global_modify_mode || global_display_mode != 0)
             clock.sec++;
         clock_update(&clock);
+        hibernation_data_store(&clock, &alarm, &timer);
     }
 
     if (systick_500ms_counter != 0)
