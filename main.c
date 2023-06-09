@@ -84,7 +84,7 @@ extern uint32_t ui32SysClock;
 
 /* Function prototypes */
 
-/* Clock functions */
+/* Clock methods */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh, int mday, int month, int year);
 void clock_update(dgtclock_t *clock);
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year);
@@ -93,19 +93,22 @@ void clock_get_date(dgtclock_t *clock, char *buf);
 void clock_get_time(dgtclock_t *clock, char *buf);
 void clock_display_date(dgtclock_t *clock);
 void clock_display_time(dgtclock_t *clock);
+void clock_button_increase(dgtclock_t *clock, int incr, int ptr);
 
-/* Alarm functions */
+/* Alarm methods */
 void alarm_init(alarm_t *alarm);
 int alarm_set(alarm_t *alarm, int sec, int min, int hour);
 void alarm_get(alarm_t *alarm, char *buf);
 void alarm_display(alarm_t *alarm);
 void alarm_go_off(alarm_t *alarm, dgtclock_t *clock);
+void alarm_button_increase(alarm_t *alarm, int incr, int ptr);
 
-/* Timer functions */
+/* Timer methods */
 void timer_init(timer_t *timer);
 void timer_update(timer_t *timer);
 void timer_display(timer_t *timer);
 void timer_go_off(timer_t *timer);
+void timer_button_increase(timer_t *timer, int incr, int ptr);
 
 /* Serial command functions */
 int parse_command(char *cmd, int *argc, char *argv[]);
@@ -126,21 +129,17 @@ bool istriggered(uint8_t keyval, uint8_t preval, int eventid);
 int get_format_nums(char *buf, int *x, int *y, int *z);
 void delay_ms(int ms);
 void update_blink_mask(uint8_t *mask, int ptr);
-void modify_value(int *target, int incr, int bound);
 void led_show_info(void);
 
-/* Create clock_t, alarm_t, timer_t instance */
+/* Create global clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
 alarm_t alarm;
 timer_t timer;
-/* Create C-major pitch instance */
-pitch_t C_major;
-/* Create music instances */
 
 int main(void)
 {
     char buf[MAXLINE];
-    int incr = 0, tmp;
+    int incr = 0;
 
     IO_initialize();
     test();
@@ -188,9 +187,11 @@ int main(void)
         if (BUTTON_EVENT_MODIFY)
         {
             if (!global_modify_mode)
-                global_modify_mode = 1,
-                global_modify_ptr = 1,
+            {
+                global_modify_mode = 1;
+                global_modify_ptr = 1;
                 update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
+            }
             continue;
         }
         if (BUTTON_EVENT_ADD)
@@ -198,6 +199,7 @@ int main(void)
         else if (BUTTON_EVENT_DEC)
             incr = -1;
 
+        /* Display */
         switch (global_display_mode)
         {
         /* Time mode */
@@ -206,22 +208,7 @@ int main(void)
             if (global_modify_mode)
             {
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
-                {
-                    switch (global_modify_ptr)
-                    {
-                    case 1:
-                        modify_value(&clock.hour, incr, 24);
-                        break;
-                    case 2:
-                        modify_value(&clock.min, incr, 60);
-                        break;
-                    case 3:
-                        modify_value(&clock.sec, incr, 60);
-                        break;
-                    default:
-                        break;
-                    }
-                }
+                    clock_button_increase(&clock, incr, global_modify_ptr);
             }
             break;
 
@@ -231,27 +218,7 @@ int main(void)
             if (global_modify_mode)
             {
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
-                {
-                    switch (global_modify_ptr)
-                    {
-                    case 1:
-                        modify_value(&clock.year, incr, 10000);
-                        break;
-                    case 2:
-                        modify_value(&clock.month, incr, 12);
-                        break;
-                    case 3:
-                        tmp = clock.mday - 1;
-                        modify_value(&tmp, incr, clock.days[clock.month]);
-                        clock.mday = tmp + 1;
-                        break;
-                    default:
-                        break;
-                    }
-                    /* Update leap year */
-                    clock_init(&clock, clock.sec, clock.min, clock.hour,
-                               clock.mday, clock.month, clock.year);
-                }
+                    clock_button_increase(&clock, incr, global_modify_ptr + 3);
             }
             break;
 
@@ -261,22 +228,7 @@ int main(void)
             if (global_modify_mode)
             {
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
-                {
-                    switch (global_modify_ptr)
-                    {
-                    case 1:
-                        modify_value(&alarm.hour, incr, 24);
-                        break;
-                    case 2:
-                        modify_value(&alarm.min, incr, 60);
-                        break;
-                    case 3:
-                        modify_value(&alarm.sec, incr, 60);
-                        break;
-                    default:
-                        break;
-                    }
-                }
+                    alarm_button_increase(&alarm, incr, global_modify_ptr);
             }
             if (BUTTON_EVENT_ENABLE)
             {
@@ -293,22 +245,7 @@ int main(void)
             if (global_modify_mode)
             {
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
-                {
-                    switch (global_modify_ptr)
-                    {
-                    case 1:
-                        modify_value(&timer.min, incr, 60);
-                        break;
-                    case 2:
-                        modify_value(&timer.sec, incr, 60);
-                        break;
-                    case 3:
-                        modify_value(&timer.millisec, incr * 10, 1000);
-                        break;
-                    default:
-                        break;
-                    }
-                }
+                    timer_button_increase(&timer, incr, global_modify_ptr);
             }
             if (BUTTON_EVENT_ENABLE)
             {
@@ -364,6 +301,23 @@ void start_up()
     }
     I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0xff);
     global_modify_mode = global_modify_ptr = 0;
+
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("                                                                   \n");
 }
 
 void events_catch()
@@ -422,7 +376,9 @@ void buzzer_on(int freq, int time_ms)
     PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, false);
 }
 
-/* Clock methods */
+/* ================================================================
+ * Clock methods
+ * ================================================================ */
 void clock_init(dgtclock_t *clock, int ss, int mm, int hh,
                 int mday, int month, int year)
 {
@@ -487,7 +443,7 @@ void clock_update(dgtclock_t *clock)
 int clock_set_date(dgtclock_t *clock, int mday, int month, int year)
 {
     int leap, days;
-    if (year < 0 || month > MONTH_DEC || month < 0)
+    if (year > 9999 || year < 0 || month > MONTH_DEC || month < 0)
         return -1;
     leap = (year % 100 && year % 4 == 0) || (year % 400 == 0);
     days = (month == MONTH_FEB) ? 28 + leap : clock->days[month];
@@ -556,8 +512,49 @@ void clock_display_time(dgtclock_t *clock)
         Delay(1000);
     }
 }
+/* modify clock value with incr caused by button press
+ * clock - clock to modify
+ *  incr - +1 or -1, correspond to button_add or button_dec
+ *   ptr - which number to modify, 1: hour, 2: min, 3: sec,
+ *         4: year, 5: month, 6:mday, 0: undefined
+ */
+void clock_button_increase(dgtclock_t *clock, int incr, int ptr)
+{
+    switch (ptr)
+    {
+    case 1:
+        clock->hour = (clock->hour + incr + 24) % 24;
+        break;
+    case 2:
+        clock->min = (clock->min + incr + 60) % 60;
+        break;
+    case 3:
+        clock->sec = (clock->sec + incr + 60) % 60;
+        break;
+    case 4:
+        clock->year = (clock->year + incr + 10000) % 10000;
+        clock_init(clock, clock->sec, clock->min, clock->hour,
+                   clock->mday, clock->month, clock->year);
+        break;
+    case 5:
+        clock->month = (clock->month + incr + 12) % 12;
+        clock_init(clock, clock->sec, clock->min, clock->hour,
+                   clock->mday, clock->month, clock->year);
+        break;
+    case 6:
+        clock->mday = (clock->mday - 1 + incr + clock->days[clock->month]) % clock->days[clock->month];
+        clock->mday = clock->mday + 1;
+        clock_init(clock, clock->sec, clock->min, clock->hour,
+                   clock->mday, clock->month, clock->year);
+        break;
+    default:
+        break;
+    }
+}
 
-/* Alarm methods */
+/* ================================================================
+ * Alarm methods
+ * ================================================================ */
 void alarm_init(alarm_t *alarm)
 {
     alarm->enable = false;
@@ -626,8 +623,32 @@ void alarm_go_off(alarm_t *alarm, dgtclock_t *clock)
     events_clear();
     global_timeout = 0;
 }
+/* modify alarm value with incr caused by button press
+ * alarm - alarm to modify
+ *  incr - +1 or -1, correspond to button_add or button_dec
+ *   ptr - which number to modify, 1: hour, 2: min, 3: sec, 0: undefined
+ */
+void alarm_button_increase(alarm_t *alarm, int incr, int ptr)
+{
+    switch (ptr)
+    {
+    case 1:
+        alarm->hour = (alarm->hour + incr + 24) % 24;
+        break;
+    case 2:
+        alarm->min = (alarm->min + incr + 60) % 60;
+        break;
+    case 3:
+        alarm->sec = (alarm->sec + incr + 60) % 60;
+        break;
+    default:
+        break;
+    }
+}
 
-/* Timer methods */
+/* ================================================================
+ * Timer methods
+ * ================================================================ */
 void timer_init(timer_t *timer)
 {
     timer->enable = false;
@@ -688,6 +709,28 @@ void timer_display(timer_t *timer)
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
         I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
         Delay(1000);
+    }
+}
+/* modify timer value with incr caused by button press
+ * timer - timer to modify
+ *  incr - +1 or -1, correspond to button_add or button_dec
+ *   ptr - which number to modify, 1: min, 2: sec, 3: millisec, 0: undefined
+ */
+void timer_button_increase(timer_t *timer, int incr, int ptr)
+{
+    switch (ptr)
+    {
+    case 1:
+        timer->min = (timer->min + incr + 60) % 60;
+        break;
+    case 2:
+        timer->sec = (timer->sec + incr + 60) % 60;
+        break;
+    case 3:
+        timer->millisec = (timer->millisec + incr * 10 + 1000) % 1000;
+        break;
+    default:
+        break;
     }
 }
 
@@ -1154,12 +1197,6 @@ void update_blink_mask(uint8_t *mask, int ptr)
         tmp = 0xff;
     }
     *mask = tmp;
-}
-void modify_value(int *target, int incr, int bound)
-{
-    int tmp = *target;
-    tmp = (tmp + incr + bound) % bound;
-    *target = tmp;
 }
 
 void led_show_info()

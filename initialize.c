@@ -6,6 +6,9 @@ uint32_t ui32IntPrioritySystick, ui32IntPriorityUart0;
 uint8_t seg7[40] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x58, 0x5e, 0x079, 0x71, 0x5c};
 uint8_t uart_receive_char;
 
+uint32_t ui32Status;
+uint32_t pui32NVData[64];
+
 void IO_initialize()
 {
     seg7['L' - 'A' + 10] = 0x38;
@@ -26,6 +29,8 @@ void IO_initialize()
     S800_GPIO_Init();
     S800_I2C0_Init();
     S800_UART_Init();
+
+    Hibernation_Init();
 
     IntEnable(INT_UART0);
     UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT); // Enable UART0 RX,TX interrupt
@@ -192,4 +197,75 @@ void PWM_Init(void)
     PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, 4000 / 4);
     PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
     PWMGenEnable(PWM0_BASE, PWM_GEN_3);
+}
+
+void Hibernation_Init()
+{
+    char buf[MAXLINE];
+    //
+    // Need to enable the hibernation peripheral after wake/reset, before using
+    // it.
+    //
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_HIBERNATE);
+    //
+    // Wait for the Hibernate module to be ready.
+    //
+    while (!SysCtlPeripheralReady(SYSCTL_PERIPH_HIBERNATE))
+    {
+    }
+    //
+    // Enable clocking to the Hibernation module.
+    //
+    HibernateEnableExpClk(SysCtlClockGet());
+    //
+    // User-implemented delay here to allow crystal to power up and stabilize.
+    //
+    //
+    // Configure the clock source for Hibernation module and enable the RTC
+    // feature.
+    //
+    HibernateClockConfig(HIBERNATE_OSC_LOWDRIVE);
+    HibernateRTCEnable();
+    //
+    // Set the RTC to 0 or an initial value. The RTC can be set once when the
+    // system is initialized after the cold startup and then left to run. Or
+    // it can be initialized before every hibernate.
+    //
+    HibernateRTCSet(0);
+    //
+    // Set the match 0 register for 30 seconds from now.
+    //
+    HibernateRTCMatchSet(0, HibernateRTCGet() + 30);
+    //
+    // Clear any pending status.
+    //
+    ui32Status = HibernateIntStatus(0);
+    HibernateIntClear(ui32Status);
+    //
+    // Save the program state information. The state information is stored in
+    // the pui32NVData[] array. It is not necessary to save the full 16 words
+    // of data, only as much as is actually needed by the program.
+    //
+    HibernateWakeSet(HIBERNATE_WAKE_RTC);
+    //
+    // Request hibernation. The following call may return because it takes a
+    // finite amount of time for power to be removed.
+    //
+    HibernateRequest();
+
+    //
+    // Restore program state information that was saved prior to
+    // hibernation.
+    //
+    HibernateDataGet(pui32NVData, 64);
+    //
+    // Now that wake up cause has been determined and state has been
+    // restored, the program can proceed with normal processor and
+    // peripheral initialization.
+    //
+
+    sprintf(buf, "p[0] = %d\n", pui32NVData[0]);
+    UARTStringPut(buf);
+    pui32NVData[0]++;
+    HibernateDataSet(pui32NVData, 64);
 }

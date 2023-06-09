@@ -21,3 +21,4 @@
 .\objects\initialize.o: .\driverlib\uart.h
 .\objects\initialize.o: .\inc\hw_ints.h
 .\objects\initialize.o: .\driverlib\pwm.h
+.\objects\initialize.o: .\driverlib\hibernate.h

@@ -21,6 +21,7 @@
 #include "uart.h"
 #include "hw_ints.h"
 #include "pwm.h"
+#include "hibernate.h"
 
 #define SYSTICK_FREQUENCY 1000 // 1000hz
 
