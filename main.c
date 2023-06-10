@@ -165,9 +165,6 @@ int main(void)
     int incr = 0;
 
     IO_initialize();
-    // test();
-    sprintf(buf, "SystemClock = %d\n", ui32SysClock);
-    UARTStringPut((byte *)buf);
     start_up();
     hibernation_wakeup_init(&clock, &alarm, &timer);
     global_already = 1;
@@ -181,6 +178,7 @@ int main(void)
     {
         /* Catch button events */
         events_catch();
+
         led_show_info();
         alarm_go_off(&alarm, &clock);
         timer_go_off(&timer);
@@ -222,7 +220,7 @@ int main(void)
         if (BUTTON_EVENT_FLIP)
         {
             global_flip ^= 1;
-            update_blink_mask(&global_blink_mask, global_modify_ptr);
+            update_blink_mask((uint8_t *)&global_blink_mask, global_modify_ptr);
             BUTTON_EVENT_FLIP = 0;
         }
 
@@ -283,6 +281,8 @@ int main(void)
 
             if (BUTTON_EVENT_ENABLE)
             {
+                if (0 == timer.millisec + timer.sec + timer.min)
+                    break;
                 global_modify_mode = global_modify_ptr = 0;
                 timer.enable = !timer.enable;
                 sprintf(buf, "%s\n",
@@ -310,12 +310,8 @@ void test()
 /* Wake from hibernation. Read data from memory */
 void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 {
-    int i;
-    char buf[MAXLINE];
     HibernateDataGet(pui32NVData, 16);
-
-    // print_log();
-
+    print_log();
     if (pui32NVData[HBN_VERIFY] != HBN_CODE_VERIFY)
     {
         pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
@@ -324,7 +320,7 @@ void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
         alarm_init(alarm, 3, 0, 8);
         timer_init(timer, 233, 13, 0);
         HibernateRTCSet(0);
-        hibernation_data_store(clock, alarm, timer);
+        // hibernation_data_store(clock, alarm, timer);
     }
     else
     {
@@ -340,7 +336,6 @@ void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 
 void hibernation_data_store(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 {
-    int i;
     pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
     pui32NVData[HBN_RTC] = HibernateRTCGet();
 
@@ -403,9 +398,12 @@ void events_catch()
 {
     static uint8_t now_val = 0xff, prev_val = 0xff;
     static int prev_pin0 = 1, now_pin0;
+    if (!global_already)
+        return;
     events_clear();
     /* Handle button events on blue panel */
     now_val = I2C0_ReadByte(TCA6424_I2CADDR, TCA6424_INPUT_PORT0);
+
     if (now_val != prev_val)
     {
         delay_ms(20);
@@ -489,7 +487,7 @@ void buzzer_music_nonblocking(int len, pitch_t notes[], int time[], bool set)
         if (music.notes[i])
         {
             PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32SysClock / music.notes[i]);
-            PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / music.notes[i] / 4);
+            PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / music.notes[i] / 500);
             PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
         }
         inner_timer_start(INNERTIMER_BUZZER, music.notetime[i]);
@@ -1445,14 +1443,14 @@ void print_log()
     int i, tmp[16];
     char buf[MAXLINE];
     UARTStringPut("\n[log] \n");
-    HibernateDataGet(tmp, 16);
+    HibernateDataGet((uint32_t *)tmp, 16);
     for (i = 0; i < 16; i++)
     {
         sprintf(buf, "p[%d] = %d\n", i, tmp[i]);
-        UARTStringPut(buf);
+        UARTStringPut((byte *)buf);
     }
 }
-
+/* Inner timer methods */
 void inner_timer_start(int timerId, int timeoutMs)
 {
     inner_timers[timerId] = timeoutMs;

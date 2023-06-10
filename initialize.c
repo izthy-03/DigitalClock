@@ -161,12 +161,16 @@ uint8_t I2C0_ReadByte(uint8_t DevAddr, uint8_t RegAddr)
     while (I2CMasterBusy(I2C0_BASE))
     {
     };
+
     I2CMasterSlaveAddrSet(I2C0_BASE, DevAddr, false);
     I2CMasterDataPut(I2C0_BASE, RegAddr);
     //	I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_BURST_SEND_START);
     I2CMasterControl(I2C0_BASE, I2C_MASTER_CMD_SINGLE_SEND);
+
     while (I2CMasterBusBusy(I2C0_BASE))
-        ;
+    {
+    };
+    // test();
     rop = (uint8_t)I2CMasterErr(I2C0_BASE);
     Delay(1000);
     // receive data
