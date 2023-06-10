@@ -27,6 +27,28 @@ Project File Date:  06/02/2023
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 4 (build 422)', folder: 'D:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'Target 1'
+compiling initialize.c...
+.\driverlib\hibernate.h(229): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarSet(struct tm *psTime);
+.\driverlib\hibernate.h(230): warning:  #231-D: declaration is not visible outside of function
+  extern int HibernateCalendarGet(struct tm *psTime);
+.\driverlib\hibernate.h(231): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarMatchSet(uint32_t ui32Index, struct tm *psTime);
+.\driverlib\hibernate.h(232): warning:  #231-D: declaration is not visible outside of function
+  extern void HibernateCalendarMatchGet(uint32_t ui32Index, struct tm *psTime);
+initialize.c(115): warning:  #550-D: variable "result"  was set but never used
+      uint8_t result;
+initialize.c(160): warning:  #550-D: variable "rop"  was set but never used
+      uint8_t value, rop;
+initialize.c(237): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+      UARTStringPut(buf);
+initialize.c(251): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+      UARTStringPut(buf);
+initialize.c(253): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+      UARTStringPut(buf);
+initialize.c(207): warning:  #177-D: variable "i"  was declared but never referenced
+      int i;
+initialize.c: 10 warnings, 0 errors
 compiling main.c...
 .\driverlib\hibernate.h(229): warning:  #231-D: declaration is not visible outside of function
   extern void HibernateCalendarSet(struct tm *psTime);
@@ -36,19 +58,25 @@ compiling main.c...
   extern void HibernateCalendarMatchSet(uint32_t ui32Index, struct tm *psTime);
 .\driverlib\hibernate.h(232): warning:  #231-D: declaration is not visible outside of function
   extern void HibernateCalendarMatchGet(uint32_t ui32Index, struct tm *psTime);
-main.c(330): warning:  #167-D: argument of type "int *" is incompatible with parameter of type "uint32_t *"
-          HibernateDataGet(tmp + i, 1);
-main.c(332): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
+main.c(225): warning:  #167-D: argument of type "volatile uint8_t *" is incompatible with parameter of type "uint8_t *"
+              update_blink_mask(&global_blink_mask, global_modify_ptr);
+main.c(313): warning:  #177-D: variable "i"  was declared but never referenced
+      int i;
+main.c(314): warning:  #177-D: variable "buf"  was declared but never referenced
+      char buf[MAXLINE];
+main.c(343): warning:  #177-D: variable "i"  was declared but never referenced
+      int i;
+main.c(1448): warning:  #167-D: argument of type "int *" is incompatible with parameter of type "uint32_t *"
+      HibernateDataGet(tmp, 16);
+main.c(1452): warning:  #167-D: argument of type "char *" is incompatible with parameter of type "uint8_t *"
           UARTStringPut(buf);
-main.c(338): warning:  #177-D: variable "notes"  was declared but never referenced
-      pitch_t notes[14] = {C4, D4, E4, F4, G4, A4, B4, C5, D5, E5, F5, G5, A5, B5};
-main.c(339): warning:  #177-D: variable "note_time"  was declared but never referenced
-      int note_time[14] = {400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400};
-main.c: 8 warnings, 0 errors
+main.c(1469): warning:  #1-D: last line of file ends without a newline
+  }
+main.c: 11 warnings, 0 errors
 linking...
-Program Size: Code=15632 RO-data=2800 RW-data=156 ZI-data=66580  
+Program Size: Code=17088 RO-data=3016 RW-data=204 ZI-data=68156  
 FromELF: creating hex file...
-".\Objects\DigitalClock.axf" - 0 Error(s), 8 Warning(s).
+".\Objects\DigitalClock.axf" - 0 Error(s), 21 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -68,7 +96,7 @@ Package Vendor: Keil
       Include file:  Device\Include\TM4C129\TM4C129.h
       Source file:   Device\Source\ARM\startup_TM4C129.s
       Source file:   Device\Source\system_TM4C129.c
-Build Time Elapsed:  00:00:01
+Build Time Elapsed:  00:00:00
 </pre>
 </body>
 </html>

@@ -44,8 +44,8 @@ typedef struct
 typedef struct
 {
     int notelen;
-    int *notes;
-    int *notetime;
+    pitch_t notes[MAXLINE];
+    int notetime[MAXLINE];
 } music_t;
 
 /* Global display mode
@@ -69,23 +69,39 @@ volatile int global_modify_ptr = 0;
 /* Global blink mask vector*/
 volatile uint8_t global_blink_mask = 0xff;
 
+/* Global already indicator */
+volatile int global_already = 0;
+
+/* Global flip indicator */
+volatile int global_flip = 0;
+
+/* Buzzer enable indicator*/
+volatile int buzzer_enable;
+
 /* Global button events */
 volatile int BUTTON_EVENT_TOGGLE, BUTTON_EVENT_MODIFY, BUTTON_EVENT_CONFIRM;
 volatile int BUTTON_EVENT_ADD, BUTTON_EVENT_DEC, BUTTON_EVENT_ENABLE;
-volatile int BUTTON_EVENT_USR0_PRESSED;
+volatile int BUTTON_EVENT_USR0_PRESSED, BUTTON_EVENT_FLIP;
 
 /* Define systick software counter */
 volatile uint16_t blink_500ms_counter, systick_500ms_counter, systick_1000ms_counter;
 volatile uint8_t systick_10ms_status, systick_500ms_status, systick_1000ms_status;
 
-volatile int global_timeout, buzzer_last_time;
+/* Ten inner timers for use */
+volatile int inner_timers[10];
+
 extern uint8_t seg7[40];
+extern uint8_t flp7[40];
 extern uint32_t ui32SysClock;
 extern uint32_t pui32NVData[64];
 
 /* Function prototypes */
+/* Inner timer functions*/
+void inner_timer_start(int timerId, int timeoutMs);
+bool inner_timer_status(int timerId);
+void inner_timer_update(void);
 
-/* Hibernation methods */
+/* Hibernation functions */
 void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer);
 void hibernation_data_store(dgtclock_t *clock, alarm_t *alarm, timer_t *timer);
 
@@ -126,15 +142,17 @@ void start_up(void);
 
 /* Buzzer functions */
 void buzzer_on(int freq, int time_ms);
+void buzzer_off(void);
+void buzzer_music_nonblocking(int len, pitch_t notes[], int time[], bool set);
 
 /* Util functions */
 void test(void);
-int lowbit(int x);
 bool istriggered(uint8_t keyval, uint8_t preval, int eventid);
 int get_format_nums(char *buf, int *x, int *y, int *z);
 void delay_ms(int ms);
 void update_blink_mask(uint8_t *mask, int ptr);
 void led_show_info(void);
+void print_log(void);
 
 /* Create global clock_t, alarm_t, timer_t instance */
 dgtclock_t clock;
@@ -147,14 +165,16 @@ int main(void)
     int incr = 0;
 
     IO_initialize();
-    test();
+    // test();
     sprintf(buf, "SystemClock = %d\n", ui32SysClock);
     UARTStringPut((byte *)buf);
-
-    hibernation_wakeup_init(&clock, &alarm, &timer);
     start_up();
+    hibernation_wakeup_init(&clock, &alarm, &timer);
+    global_already = 1;
 
     clock_get_date(&clock, buf);
+    UARTStringPut((byte *)buf);
+    clock_get_time(&clock, buf);
     UARTStringPut((byte *)buf);
 
     while (1)
@@ -163,6 +183,7 @@ int main(void)
         events_catch();
         led_show_info();
         alarm_go_off(&alarm, &clock);
+        timer_go_off(&timer);
         /* Handle button events */
         if (BUTTON_EVENT_TOGGLE)
         {
@@ -198,6 +219,13 @@ int main(void)
             }
             continue;
         }
+        if (BUTTON_EVENT_FLIP)
+        {
+            global_flip ^= 1;
+            update_blink_mask(&global_blink_mask, global_modify_ptr);
+            BUTTON_EVENT_FLIP = 0;
+        }
+
         if (BUTTON_EVENT_ADD)
             incr = 1;
         else if (BUTTON_EVENT_DEC)
@@ -234,6 +262,7 @@ int main(void)
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
                     alarm_button_increase(&alarm, incr, global_modify_ptr);
             }
+
             if (BUTTON_EVENT_ENABLE)
             {
                 alarm.enable = !alarm.enable;
@@ -251,6 +280,7 @@ int main(void)
                 if (BUTTON_EVENT_ADD || BUTTON_EVENT_DEC)
                     timer_button_increase(&timer, incr, global_modify_ptr);
             }
+
             if (BUTTON_EVENT_ENABLE)
             {
                 global_modify_mode = global_modify_ptr = 0;
@@ -280,13 +310,16 @@ void test()
 /* Wake from hibernation. Read data from memory */
 void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 {
-    int i, c, a, t, mask = 0xffff;
-    for (i = 0; i < 5; i++)
-        HibernateDataGet(pui32NVData + i, 1);
+    int i;
+    char buf[MAXLINE];
+    HibernateDataGet(pui32NVData, 16);
+
+    // print_log();
 
     if (pui32NVData[HBN_VERIFY] != HBN_CODE_VERIFY)
     {
         pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
+        pui32NVData[HBN_RTC] = HibernateRTCGet();
         clock_init(clock, 59, 00, 8, 11, 5, 2023);
         alarm_init(alarm, 3, 0, 8);
         timer_init(timer, 233, 13, 0);
@@ -295,42 +328,26 @@ void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
     }
     else
     {
-        c = pui32NVData[HBN_CLOCK];
-        a = pui32NVData[HBN_ALARM];
-        t = pui32NVData[HBN_TIMER];
-        clock_init(clock, (c & mask), (c >> 4) & mask, (c >> 8) & mask, (c >> 12) & mask,
-                   (c >> 16) & mask, (c >> 20) & mask);
-        clock->sec += HibernateRTCGet() - pui32NVData[HBN_RTC];
+        memcpy(clock, pui32NVData + HBN_CLOCK, sizeof(int) * 6);
+        memcpy(alarm, pui32NVData + HBN_ALARM, sizeof(int) * 3);
+        memcpy(timer, pui32NVData + HBN_TIMER, sizeof(int) * 3);
+        clock_init(clock, clock->sec, clock->min, clock->hour,
+                   clock->mday, clock->month, clock->year);
+        clock->sec += HibernateRTCGet() - HibernateRTCMatchGet(0);
         clock_update(clock);
-
-        alarm_init(alarm, (a & mask), (a >> 4) & mask, (a >> 8) & mask);
-        timer_init(timer, (t & mask), (t >> 4) & mask, (t >> 8) & mask);
     }
 }
 
 void hibernation_data_store(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 {
-    char buf[MAXLINE];
-    int i, tmp[16];
+    int i;
     pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
     pui32NVData[HBN_RTC] = HibernateRTCGet();
-    pui32NVData[HBN_CLOCK] = (clock->sec) | (clock->min << 4) | (clock->hour << 8) |
-                             (clock->mday << 12) | (clock->month << 16) | (clock->year << 20);
-    pui32NVData[HBN_ALARM] = (alarm->sec) | (alarm->min << 4) | (alarm->hour << 8) |
-                             (alarm->enable << 12);
-    pui32NVData[HBN_TIMER] = (timer->millisec) | (timer->sec << 4) | (timer->min << 8) |
-                             (timer->enable << 12);
 
-    for (i = 0; i < 5; i++)
-        HibernateDataSet(pui32NVData + i, 1);
-
-    UARTStringPut("\n[log] store success\n");
-    for (i = 0; i < 5; i++)
-    {
-        HibernateDataGet(tmp + i, 1);
-        sprintf(buf, "exp = 0x%x, p[%d] = 0x%x\n", pui32NVData[i], i, tmp[i]);
-        UARTStringPut(buf);
-    }
+    memcpy(pui32NVData + HBN_CLOCK, clock, sizeof(int) * 6);
+    memcpy(pui32NVData + HBN_ALARM, alarm, sizeof(int) * 3);
+    memcpy(pui32NVData + HBN_TIMER, timer, sizeof(int) * 3);
+    HibernateDataSet(pui32NVData, 16);
 }
 
 void start_up()
@@ -340,12 +357,12 @@ void start_up()
     int student_id[8] = {2, 1, 9, 1, 1, 1, 0, 1};
     int i;
     uint8_t mask = 0x80;
-    // for (i = 0; i < 7; i++)
-    //     buzzer_on(notes[i], 100);
+
+    buzzer_music_nonblocking(14, notes, note_time, 1);
 
     global_modify_mode = global_modify_ptr = 1;
-    global_timeout = 3000;
-    while (global_timeout)
+    inner_timer_start(INNERTIMER_GENERAL, 3000);
+    while (inner_timer_status(INNERTIMER_GENERAL))
     {
         for (i = 0, mask = 0x80; i < 8; i++, mask >>= 1)
         {
@@ -362,18 +379,20 @@ void start_up()
     I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0xff);
     global_modify_mode = global_modify_ptr = 0;
 
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
-    // UARTStringPut("                                                                   \n");
+    UARTStringPut("===================================================================\n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("     o8o                 .   oooo\n");
+    UARTStringPut("     \"\"'               .o8   `888\n");
+    UARTStringPut("    oooo    oooooooo .o888oo  888 .oo.   oooo    ooo\n");
+    UARTStringPut("    `888   d'\"\"7d8P    888    888P\"Y88b   `88.  .8'\n");
+    UARTStringPut("     888     .d8P'     888    888   888    `88..8'\n");
+    UARTStringPut("     888   .d8P'  .P   888 .  888   888     `888'\n");
+    UARTStringPut("    o888o d8888888P    \"888\" o888o o888o     .8'\n");
+    UARTStringPut("                                         .o..P'\n");
+    UARTStringPut("                                         `Y8P'\n");
+    UARTStringPut("                                                                   \n");
+    UARTStringPut("===================================================================\n");
+
     // UARTStringPut("                                                                   \n");
     // UARTStringPut("                                                                   \n");
     // UARTStringPut("                                                                   \n");
@@ -397,6 +416,7 @@ void events_catch()
         BUTTON_EVENT_ADD = istriggered(now_val, prev_val, BUTTON_ID_ADD);
         BUTTON_EVENT_DEC = istriggered(now_val, prev_val, BUTTON_ID_DEC);
         BUTTON_EVENT_ENABLE = istriggered(now_val, prev_val, BUTTON_ID_ENABLE);
+        BUTTON_EVENT_FLIP = istriggered(now_val, prev_val, BUTTON_ID_FLIP);
         prev_val = now_val;
     }
     /* Handle button events on red panel */
@@ -430,10 +450,51 @@ void buzzer_on(int freq, int time_ms)
         PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / freq / 100);
         PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
     }
-    buzzer_last_time = time_ms;
-    while (buzzer_last_time)
+
+    inner_timer_start(INNERTIMER_BUZZER, time_ms);
+    while (inner_timer_status(INNERTIMER_BUZZER))
         ;
     PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, false);
+}
+/* Turn off the buzzer */
+void buzzer_off()
+{
+    buzzer_enable = 0;
+    PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, false);
+}
+/* Concurrent music player */
+void buzzer_music_nonblocking(int len, pitch_t notes[], int time[], bool set)
+{
+    static music_t music;
+    static int i;
+    PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, false);
+    if (set)
+    {
+        music.notelen = len;
+        for (i = 0; i < len; i++)
+        {
+            music.notes[i] = notes[i];
+            music.notetime[i] = time[i];
+        }
+        i = 0;
+        buzzer_enable = 1;
+    }
+    else
+    {
+        if (i >= music.notelen)
+        {
+            buzzer_enable = 0;
+            return;
+        }
+        if (music.notes[i])
+        {
+            PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32SysClock / music.notes[i]);
+            PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / music.notes[i] / 4);
+            PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
+        }
+        inner_timer_start(INNERTIMER_BUZZER, music.notetime[i]);
+        i++;
+    }
 }
 
 /* ================================================================
@@ -545,13 +606,28 @@ void clock_display_date(dgtclock_t *clock)
     bits[2] = (clock->month + 1) % 10, bits[3] = (clock->month + 1) / 10;
     bits[4] = clock->year % 10, bits[5] = clock->year / 10 % 10;
     bits[6] = clock->year / 100 % 10, bits[7] = clock->year / 1000;
-    for (i = 0; i < 8; i++, mask >>= 1)
+    if (!global_flip)
     {
-        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
-        Delay(1000);
+        for (i = 0; i < 8; i++, mask >>= 1)
+        {
+            seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
+            Delay(1000);
+        }
+    }
+    else
+    {
+        mask = 0x01;
+        for (i = 0; i < 8; i++, mask <<= 1)
+        {
+            seg_dot = (i == 1 || i == 3) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (flp7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
+            Delay(1000);
+        }
     }
 }
 /* Display time once  */
@@ -563,13 +639,27 @@ void clock_display_time(dgtclock_t *clock)
     bits[0] = clock->sec % 10, bits[1] = clock->sec / 10;
     bits[2] = clock->min % 10, bits[3] = clock->min / 10;
     bits[4] = clock->hour % 10, bits[5] = clock->hour / 10;
-    for (i = 0; i < 6; i++, mask >>= 1)
+    if (!global_flip)
     {
-        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
-        Delay(1000);
+        for (i = 0; i < 6; i++, mask >>= 1)
+        {
+            seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
+            Delay(1000);
+        }
+    }
+    else
+    {
+        for (i = 0, mask = 0x01; i < 6; i++, mask <<= 1)
+        {
+            seg_dot = (i == 1 || i == 3) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (flp7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & global_blink_mask);
+            Delay(1000);
+        }
     }
 }
 /* modify clock value with incr caused by button press
@@ -646,42 +736,59 @@ void alarm_display(alarm_t *alarm)
 {
     /* Format: AL xx.yy.zz */
     int i, bits[8];
-    uint8_t mask = 0x80, seg_dot = 0x00;
+    uint8_t mask, seg_dot = 0x00;
     bits[0] = alarm->sec % 10, bits[1] = alarm->sec / 10;
     bits[2] = alarm->min % 10, bits[3] = alarm->min / 10;
     bits[4] = alarm->hour % 10, bits[5] = alarm->hour / 10;
     bits[6] = 'L' - 'A' + 10, bits[7] = 'A' - 'A' + 10;
-    for (i = 0; i < 8; i++, mask >>= 1)
+    if (!global_flip)
     {
-        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
-        Delay(1000);
+        for (i = 0, mask = 0x80; i < 8; i++, mask >>= 1)
+        {
+            seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
+            Delay(1000);
+        }
+    }
+    else
+    {
+        for (i = 0, mask = 0x01; i < 8; i++, mask <<= 1)
+        {
+            seg_dot = (i == 1 || i == 3) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (flp7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
+            Delay(1000);
+        }
     }
 }
 void alarm_go_off(alarm_t *alarm, dgtclock_t *clock)
 {
     pitch_t notes[7] = {C4, D4, E4, F4, G4, A4, B4};
-    int i = 6;
+    int ntime[7] = {400, 400, 400, 400, 400, 400, 400};
+
     if (!alarm->enable || alarm->hour != clock->hour ||
         alarm->min != clock->min || alarm->sec != clock->sec)
         return;
+
     global_display_mode = 2;
     global_modify_mode = global_modify_ptr = 0;
-    global_timeout = 5000;
-    while (global_timeout && !BUTTON_EVENT_ENABLE)
+    inner_timer_start(INNERTIMER_ALARM, 10000);
+    while (inner_timer_status(INNERTIMER_ALARM) && !BUTTON_EVENT_ENABLE)
     {
         events_catch();
         if (systick_500ms_status)
             alarm_display(alarm);
         else
-            I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, 0x00);
-        buzzer_on(notes[i], 100);
-        i = (i - 1 + 7) % 7;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        if (!buzzer_enable)
+            buzzer_music_nonblocking(7, notes, ntime, 1);
     }
     events_clear();
-    global_timeout = 0;
+    buzzer_off();
+    global_display_mode = 0;
 }
 /* modify alarm value with incr caused by button press
  * alarm - alarm to modify
@@ -719,6 +826,8 @@ void timer_init(timer_t *timer, int millisec, int sec, int min)
 /* Update timer when counting down */
 void timer_update(timer_t *timer)
 {
+    if (timer->millisec + timer->sec + timer->min == 0)
+        return;
     if (timer->millisec < 0)
     {
         timer->sec--;
@@ -732,11 +841,9 @@ void timer_update(timer_t *timer)
     /* Time up */
     if (timer->min < 0)
     {
-        timer->enable = false;
         timer->millisec = 0;
         timer->sec = 0;
         timer->min = 0;
-        UARTStringPut("\n>>> Time is up!\n");
     }
 }
 /* Wrapped enable function */
@@ -762,13 +869,27 @@ void timer_display(timer_t *timer)
     bits[2] = timer->sec % 10, bits[3] = timer->sec / 10;
     bits[4] = timer->min % 10, bits[5] = timer->min / 10;
     bits[6] = 'D' - 'A' + 10, bits[7] = 'C' - 'A' + 10;
-    for (i = 0; i < 8; i++, mask >>= 1)
+    if (!global_flip)
     {
-        seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
-        I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
-        Delay(1000);
+        for (i = 0; i < 8; i++, mask >>= 1)
+        {
+            seg_dot = (i == 2 || i == 4) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (seg7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
+            Delay(1000);
+        }
+    }
+    else
+    {
+        for (i = 0, mask = 0x01; i < 8; i++, mask <<= 1)
+        {
+            seg_dot = (i == 1 || i == 3) ? 0x80 : 0x00;
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT1, (flp7[bits[i]] | seg_dot));
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, mask & (global_blink_mask | 0x03));
+            Delay(1000);
+        }
     }
 }
 /* modify timer value with incr caused by button press
@@ -793,7 +914,34 @@ void timer_button_increase(timer_t *timer, int incr, int ptr)
         break;
     }
 }
+void timer_go_off(timer_t *timer)
+{
+    pitch_t notes[7] = {C4, D4, E4, F4, G4, A4, B4};
+    int ntime[7] = {100, 100, 100, 100, 100, 100, 100};
 
+    if (!timer->enable || timer->millisec || timer->sec || timer->min)
+        return;
+    timer->enable = false;
+    UARTStringPut("\n>>> Time is up!\n");
+
+    global_display_mode = 3;
+    global_modify_mode = global_modify_ptr = 0;
+    inner_timer_start(INNERTIMER_TIMER, 5000);
+
+    while (inner_timer_status(INNERTIMER_TIMER) && !BUTTON_EVENT_ENABLE)
+    {
+        events_catch();
+        if (systick_500ms_status)
+            timer_display(timer);
+        else
+            I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
+        if (!buzzer_enable)
+            buzzer_music_nonblocking(7, notes, ntime, 1);
+    }
+    events_clear();
+    buzzer_off();
+    global_display_mode = 0;
+}
 /*
     Corresponding to the startup_TM4C129.s vector table systick interrupt program name
 */
@@ -836,10 +984,10 @@ void SysTick_Handler(void)
     }
 
     /* Handle timeout */
-    if (global_timeout != 0)
-        global_timeout--;
-    if (buzzer_last_time != 0)
-        buzzer_last_time--;
+    inner_timer_update();
+
+    if (buzzer_enable && !inner_timer_status(INNERTIMER_BUZZER))
+        buzzer_music_nonblocking(0, NULL, NULL, 0);
 
     if (systick_1000ms_counter != 0)
     {
@@ -852,7 +1000,16 @@ void SysTick_Handler(void)
         if (!global_modify_mode || global_display_mode != 0)
             clock.sec++;
         clock_update(&clock);
-        hibernation_data_store(&clock, &alarm, &timer);
+
+        if (global_already)
+        {
+            HibernateRTCMatchSet(0, HibernateRTCGet());
+            if (clock.sec % 2 == 0)
+            {
+                hibernation_data_store(&clock, &alarm, &timer);
+                // print_log();
+            }
+        }
     }
 
     if (systick_500ms_counter != 0)
@@ -1174,25 +1331,15 @@ void UART0_Handler(void)
     //     UARTStringPut((byte *)argv[i]);
     //     UARTStringPut("\n");
     // }
+
     for (i = 0; i < argc; i++)
         free(argv[i]);
 
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
-    // while (GPIOPinRead(GPIO_PORTJ_BASE, GPIO_PIN_1) == 0)
-    //     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, GPIO_PIN_1);
     GPIOPinWrite(GPIO_PORTN_BASE, GPIO_PIN_1, 0);
 }
 
 /* Util functions */
-
-/* Return the lowest bit, start from 0 */
-int lowbit(int x)
-{
-    int k = 0;
-    for (; !(x & 1); k++)
-        x >>= 1;
-    return k;
-}
 
 bool istriggered(uint8_t keyval, uint8_t preval, int eventid)
 {
@@ -1210,6 +1357,8 @@ int get_format_nums(char *buf, int *x, int *y, int *z)
         delim = ':';
     else if (strstr(buf, "-"))
         delim = '-';
+    else if (strstr(buf, "/"))
+        delim = '/';
     else
         return -1;
 
@@ -1229,34 +1378,56 @@ int get_format_nums(char *buf, int *x, int *y, int *z)
 
 void delay_ms(int ms)
 {
-    global_timeout = ms;
-    while (global_timeout)
+    inner_timer_start(INNERTIMER_GENERAL, ms);
+    while (inner_timer_status(INNERTIMER_GENERAL))
         ;
 }
 
 void update_blink_mask(uint8_t *mask, int ptr)
 {
     uint8_t tmp = *mask;
-    switch (ptr)
-    {
-    case 0:
-        tmp = 0xff;
-        break;
-    case 1:
-        tmp ^= 0x0f;
-        tmp |= ~0x0f;
-        break;
-    case 2:
-        tmp ^= 0x30;
-        tmp |= ~0x30;
-        break;
-    case 3:
-        tmp ^= 0xc0;
-        tmp |= ~0xc0;
-        break;
-    default:
-        tmp = 0xff;
-    }
+    if (!global_flip)
+        switch (ptr)
+        {
+        case 0:
+            tmp = 0xff;
+            break;
+        case 1:
+            tmp ^= 0x0f;
+            tmp |= ~0x0f;
+            break;
+        case 2:
+            tmp ^= 0x30;
+            tmp |= ~0x30;
+            break;
+        case 3:
+            tmp ^= 0xc0;
+            tmp |= ~0xc0;
+            break;
+        default:
+            tmp = 0xff;
+        }
+    else
+        switch (ptr)
+        {
+        case 0:
+            tmp = 0xff;
+            break;
+        case 1:
+            tmp ^= 0xf0;
+            tmp |= ~0xf0;
+            break;
+        case 2:
+            tmp ^= 0x0c;
+            tmp |= ~0x0c;
+            break;
+        case 3:
+            tmp ^= 0x03;
+            tmp |= ~0x03;
+            break;
+        default:
+            tmp = 0xff;
+        }
     *mask = tmp;
 }
 
@@ -1268,4 +1439,31 @@ void led_show_info()
     leds |= alarm.enable ? 0x40 : 0x00;
     leds |= (timer.enable && systick_500ms_status ? 0x80 : 0x00);
     I2C0_WriteByte(PCA9557_I2CADDR, PCA9557_OUTPUT, ~leds);
+}
+void print_log()
+{
+    int i, tmp[16];
+    char buf[MAXLINE];
+    UARTStringPut("\n[log] \n");
+    HibernateDataGet(tmp, 16);
+    for (i = 0; i < 16; i++)
+    {
+        sprintf(buf, "p[%d] = %d\n", i, tmp[i]);
+        UARTStringPut(buf);
+    }
+}
+
+void inner_timer_start(int timerId, int timeoutMs)
+{
+    inner_timers[timerId] = timeoutMs;
+}
+bool inner_timer_status(int timerId)
+{
+    return !!inner_timers[timerId];
+}
+void inner_timer_update()
+{
+    int i;
+    for (i = 0; i < 10; i++)
+        inner_timers[i] ? inner_timers[i]-- : 0;
 }

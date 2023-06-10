@@ -4,6 +4,7 @@ uint32_t ui32SysClock, ui32IntPriorityGroup, ui32IntPriorityMask;
 uint32_t ui32IntPrioritySystick, ui32IntPriorityUart0;
 
 uint8_t seg7[40] = {0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x58, 0x5e, 0x079, 0x71, 0x5c};
+uint8_t flp7[40] = {0x3f, 0x30, 0x5b, 0x79, 0x74, 0x6d, 0x6f, 0x38, 0x7f, 0x7d, 0x7e, 0x67, 0x43, 0x73, 0x4f, 0x4e};
 uint8_t uart_receive_char;
 
 uint32_t ui32Status;
@@ -12,6 +13,7 @@ uint32_t pui32NVData[64];
 void IO_initialize()
 {
     seg7['L' - 'A' + 10] = 0x38;
+    flp7['L' - 'A' + 10] = 0x07;
     // use internal 16M oscillator, PIOSC
     // ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_16MHZ |SYSCTL_OSC_INT |SYSCTL_USE_OSC), 16000000);
     // ui32SysClock = SysCtlClockFreqSet((SYSCTL_XTAL_16MHZ |SYSCTL_OSC_INT |SYSCTL_USE_OSC), 8000000);
@@ -85,7 +87,7 @@ void S800_UART_Init(void)
 
     // Configure the UART for 115,200, 8-N-1 operation.
     UARTConfigSetExpClk(UART0_BASE, ui32SysClock, 115200, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-    UARTStringPut((uint8_t *)"\r\nHello, world!\r\n");
+    UARTStringPut((uint8_t *)"\r\nDigital clock is starting...\r\n");
     UARTFIFOLevelSet(UART0_BASE, UART_FIFO_TX2_8, UART_FIFO_RX7_8);
 }
 void S800_GPIO_Init(void)
@@ -247,7 +249,8 @@ void Hibernation_Init()
     // }
     sprintf(buf, "RTC = %d\n", HibernateRTCGet());
     UARTStringPut(buf);
-
+    sprintf(buf, "RTCMatch = %d\n", HibernateRTCMatchGet(0));
+    UARTStringPut(buf);
     //
     // Set the match 0 register for 30 seconds from now.
     //
@@ -257,33 +260,4 @@ void Hibernation_Init()
     //
     ui32Status = HibernateIntStatus(0);
     HibernateIntClear(ui32Status);
-    //
-    // Save the program state information. The state information is stored in
-    // the pui32NVData[] array. It is not necessary to save the full 16 words
-    // of data, only as much as is actually needed by the program.
-    //
-    // HibernateWakeSet(HIBERNATE_WAKE_RTC);
-    //
-    // Request hibernation. The following call may return because it takes a
-    // finite amount of time for power to be removed.
-    //
-    // HibernateRequest();
-
-    //
-    // Restore program state information that was saved prior to
-    // hibernation.
-    //
-    HibernateDataGet(pui32NVData, 16);
-    // //
-    // // Now that wake up cause has been determined and state has been
-    // // restored, the program can proceed with normal processor and
-    // // peripheral initialization.
-    // //
-    for (i = 0; i < 5; i++)
-    {
-        sprintf(buf, "p[%d] = %d\n", i, pui32NVData[i]);
-        UARTStringPut(buf);
-    }
-
-    // HibernateDataSet(pui32NVData, 64);
 }

@@ -91,13 +91,21 @@
 #define BUTTON_ID_ADD 6
 #define BUTTON_ID_DEC 7
 #define BUTTON_ID_ENABLE 4
+#define BUTTON_ID_FLIP 3
 
 /* Define Hibernation data storage index */
-#define HBN_VERIFY 0x00
-#define HBN_RTC 0x01
-#define HBN_CLOCK 0x02
-#define HBN_ALARM 0x03
-#define HBN_TIMER 0x04
+#define HBN_VERIFY 0
+#define HBN_RTC 1
+#define HBN_CLOCK 2
+#define HBN_ALARM 8
+#define HBN_TIMER 11
+
+/* Define inner timer id */
+#define INNERTIMER_GENERAL 0
+#define INNERTIMER_BUZZER 1
+#define INNERTIMER_ALARM 2
+#define INNERTIMER_TIMER 3
+
 /* Define verify code */
 #define HBN_CODE_VERIFY 21911101
 
