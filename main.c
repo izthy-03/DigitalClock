@@ -1,8 +1,8 @@
 /*
  * Digital Clock
+ *  encoded in utf-8
  *
- *
- *
+ *  by 江天航 521021911101
  */
 
 #include "initialize.h"
@@ -311,7 +311,7 @@ void test()
 void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
 {
     HibernateDataGet(pui32NVData, 16);
-    print_log();
+    // print_log();
     if (pui32NVData[HBN_VERIFY] != HBN_CODE_VERIFY)
     {
         pui32NVData[HBN_VERIFY] = HBN_CODE_VERIFY;
@@ -320,7 +320,7 @@ void hibernation_wakeup_init(dgtclock_t *clock, alarm_t *alarm, timer_t *timer)
         alarm_init(alarm, 3, 0, 8);
         timer_init(timer, 233, 13, 0);
         HibernateRTCSet(0);
-        // hibernation_data_store(clock, alarm, timer);
+        hibernation_data_store(clock, alarm, timer);
     }
     else
     {
@@ -351,6 +351,7 @@ void start_up()
     int note_time[14] = {400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400, 400};
     int student_id[8] = {2, 1, 9, 1, 1, 1, 0, 1};
     int i;
+    char buf[MAXLINE];
     uint8_t mask = 0x80;
 
     buzzer_music_nonblocking(14, notes, note_time, 1);
@@ -359,6 +360,7 @@ void start_up()
     inner_timer_start(INNERTIMER_GENERAL, 3000);
     while (inner_timer_status(INNERTIMER_GENERAL))
     {
+
         for (i = 0, mask = 0x80; i < 8; i++, mask >>= 1)
         {
             I2C0_WriteByte(TCA6424_I2CADDR, TCA6424_OUTPUT_PORT2, 0x00);
@@ -487,7 +489,7 @@ void buzzer_music_nonblocking(int len, pitch_t notes[], int time[], bool set)
         if (music.notes[i])
         {
             PWMGenPeriodSet(PWM0_BASE, PWM_GEN_3, ui32SysClock / music.notes[i]);
-            PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / music.notes[i] / 500);
+            PWMPulseWidthSet(PWM0_BASE, PWM_OUT_7, ui32SysClock / music.notes[i] / 4);
             PWMOutputState(PWM0_BASE, PWM_OUT_7_BIT, true);
         }
         inner_timer_start(INNERTIMER_BUZZER, music.notetime[i]);

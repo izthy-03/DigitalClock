@@ -237,7 +237,7 @@ void Hibernation_Init()
     HibernateClockConfig(HIBERNATE_OSC_LOWDRIVE);
 
     HibernateLowBatSet(HIBERNATE_LOW_BAT_DETECT | HIBERNATE_LOW_BAT_2_3V);
-    sprintf(buf, "LowBat = 0x%x\n", HibernateLowBatGet());
+    sprintf(buf, "LowBattery = 0x%x\n", HibernateLowBatGet());
     UARTStringPut(buf);
 
     HibernateRTCEnable();
