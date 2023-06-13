@@ -3,12 +3,12 @@
         {
             "name": "Target 1",
             "includePath": [
-                "d:\\课程作业资料\\工科创II\\DigitalClock\\inc",
-                "d:\\课程作业资料\\工科创II\\DigitalClock\\driverlib",
+                "d:\\课程作业资料\\工科创II\\大作业-江天航-521021911101\\DigitalClock\\inc",
+                "d:\\课程作业资料\\工科创II\\大作业-江天航-521021911101\\DigitalClock\\driverlib",
                 "D:\\Keil_v5\\ARM\\ARMCC\\include",
                 "D:\\Keil_v5\\ARM\\ARMCC\\include\\rw",
-                "d:\\课程作业资料\\工科创II\\DigitalClock",
-                "d:\\课程作业资料\\工科创II\\DigitalClock\\driverlib\\rvmdk"
+                "d:\\课程作业资料\\工科创II\\大作业-江天航-521021911101\\DigitalClock",
+                "d:\\课程作业资料\\工科创II\\大作业-江天航-521021911101\\DigitalClock\\driverlib\\rvmdk"
             ],
             "defines": [
                 "PART_TM4C1294NCPDT",
