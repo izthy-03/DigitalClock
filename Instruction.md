@@ -1,6 +1,5 @@
 # Digital Clock - Instructions 数字钟说明文档
 
-#### 																	> by 江天航 521021911101
 
 ----
 ## File directory 文件目录
